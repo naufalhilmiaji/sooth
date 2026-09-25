@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sooth.claims import split_claims
@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.log:
         record = log_record(result, threshold=args.confidence,
                             sources=[path for path, _ in sources], draft=args.text)
-        record["ts"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        record["ts"] = datetime.now(UTC).isoformat(timespec="seconds")
         with Path(args.log).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record) + "\n")
 

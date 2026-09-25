@@ -41,9 +41,9 @@ def counts(verdicts: list[Verdict]) -> dict[str, int]:
 def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
     t = counts(verdicts)
     lines = [
-        f"# Sooth\n",
-        f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
-        f" — threshold {threshold:.2f}\n",
+        "# Sooth\n",
+        (f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
+         f" — threshold {threshold:.2f}\n"),
         "| # | Claim | Verdict | P | Why (P distribution) |",
         "|---|-------|---------|---|----------------------|",
     ]
@@ -62,8 +62,8 @@ def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
 def render_plain(verdicts: list[Verdict], threshold: float) -> str:
     t = counts(verdicts)
     lines = [
-        f"PASS {t[PASS]}  FAIL {t[FAIL]}  REVIEW {t[REVIEW]}  UNCHECKABLE {t[UNCHECKABLE]}"
-        f"  (threshold {threshold:.2f})"
+        (f"PASS {t[PASS]}  FAIL {t[FAIL]}  REVIEW {t[REVIEW]}  UNCHECKABLE {t[UNCHECKABLE]}"
+         f"  (threshold {threshold:.2f})")
     ]
     for v in verdicts:
         lines.append(f"{_PLAIN[v.kind]:<11} {_p(v):.2f}  line {v.line}  {v.claim_text}")

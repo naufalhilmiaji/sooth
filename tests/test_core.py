@@ -11,9 +11,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
-from sooth.claims import split_claims  # noqa: E402
-from sooth.report import bar, exit_code, log_record, render_markdown  # noqa: E402
-from sooth.verify import (  # noqa: E402
+from sooth.claims import split_claims
+from sooth.report import bar, exit_code, log_record, render_markdown
+from sooth.verify import (
     FAIL,
     PASS,
     REVIEW,
@@ -29,7 +29,7 @@ from sooth.verify import (  # noqa: E402
 
 
 def v(kind: str, **kw) -> Verdict:
-    base = dict(claim_id="c1", claim_text="Refunds take 3 days.", line=1, kind=kind)
+    base = {"claim_id": "c1", "claim_text": "Refunds take 3 days.", "line": 1, "kind": kind}
     base.update(kw)
     return Verdict(**base)
 
