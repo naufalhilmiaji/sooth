@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 
 from sooth.claims import Claim
@@ -17,6 +18,30 @@ PASS = "PASS"
 FAIL = "FAIL"
 REVIEW = "REVIEW"
 UNCHECKABLE = "UNCHECKABLE"
+
+DETAIL_FLOOR = 0.5  # PASS needs both supports-confidence and this detail-match probability
+
+_NUM = re.compile(r"\d+(?:[.,]\d+)*")
+
+
+def extract_numbers(text: str) -> set[str]:
+    """Number tokens in raw and separator-stripped form ('27,5' → '27,5' + '275')."""
+    out: set[str] = set()
+    for m in _NUM.finditer(text):
+        out.add(m.group())
+        out.add(m.group().replace(".", "").replace(",", ""))
+    return out
+
+
+def missing_numbers(claim_text: str, source_texts: list[str]) -> list[str]:
+    """Claim numbers absent from every source — deterministic smuggle detector."""
+    source_nums = extract_numbers(" ".join(source_texts))
+    missing = []
+    for m in _NUM.finditer(claim_text):
+        raw = m.group()
+        if raw not in source_nums and raw.replace(".", "").replace(",", "") not in source_nums:
+            missing.append(raw)
+    return missing
 
 
 class VerifyError(Exception):
@@ -33,6 +58,8 @@ class Verdict:
     choice: str | None = None
     probabilities: dict[str, float] = field(default_factory=dict)
     confidence: float | None = None
+    details_p: float | None = None
+    missing_numbers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -64,6 +91,26 @@ def map_verdict(claim: Claim, p_checkable: float, choice: str, probabilities: di
         choice=choice,
         probabilities=dict(probabilities),
         confidence=confidence,
+    )
+
+
+def apply_safeguards(verdict: Verdict, details_p: float | None,
+                     missing: list[str]) -> Verdict:
+    """Demote PASS when detail-gate is low or claim numbers are absent from sources."""
+    kind = verdict.kind
+    if kind == PASS and ((details_p is not None and details_p < DETAIL_FLOOR) or missing):
+        kind = REVIEW
+    return Verdict(
+        claim_id=verdict.claim_id,
+        claim_text=verdict.claim_text,
+        line=verdict.line,
+        kind=kind,
+        p_checkable=verdict.p_checkable,
+        choice=verdict.choice,
+        probabilities=verdict.probabilities,
+        confidence=verdict.confidence,
+        details_p=details_p,
+        missing_numbers=tuple(missing),
     )
 
 
@@ -101,6 +148,16 @@ def build_questions(claims: list[Claim]) -> dict:
                 ),
             },
         }
+        questions[f"{c.id}_details"] = {
+            "type": "noul",
+            "instructions": (
+                f"Statement: {c.text}\n\n"
+                "Does EVERY specific detail in the statement — names, numbers, dates, "
+                "quantities, and comparisons such as 'more than' or 'about' — exactly "
+                "match the evidence in `sources`? No if any detail is absent, slightly "
+                "altered, or hedged differently than the sources."
+            ),
+        }
     return questions
 
 
@@ -131,10 +188,13 @@ def verify_claims(claims: list[Claim], sources: list[tuple[str, str]],
                     usage["output_tokens"] = (usage["output_tokens"] or 0) + (resp.usage.output_tokens or 0)
                 for c in chunk:
                     noul = resp.nouls[f"{c.id}_checkable"].noul
+                    details_p = resp.nouls[f"{c.id}_details"].noul
                     ans = resp.choices[f"{c.id}_verdict"]
-                    verdicts.append(
-                        map_verdict(c, noul, ans.choice, ans.probabilities, ans.confidence, threshold)
+                    verdict = map_verdict(
+                        c, noul, ans.choice, ans.probabilities, ans.confidence, threshold
                     )
+                    missing = missing_numbers(c.text, [t for _, t in sources])
+                    verdicts.append(apply_safeguards(verdict, details_p, missing))
     except VerifyError:
         raise
     except Exception as e:  # SDK error hierarchy; keep CLI free of SDK imports

@@ -67,27 +67,32 @@ One request per batch of ≤ 30 claims. State is shared; questions reference cla
 }
 ```
 
-Per claim, **two parallel questions** (fan-out pattern):
+Per claim, **three parallel questions** (fan-out pattern; statement text is embedded in the instructions):
 
 ```jsonc
 "c1_checkable": {
   "type": "noul",
-  "instructions": "Is `claims[c1].text` a concrete factual claim that evidence in `sources` could support or contradict? No for opinions, vague praise, questions, promises about the future.",
+  "instructions": "Statement: <claim text>\n\nIs the statement a concrete factual claim that the evidence in `sources` could support or contradict? ...",
   // noul answer = P(checkable)
 },
 "c1_verdict": {
   "type": "choice",
-  "instructions": "Does the evidence in `sources` support the claim `claims[c1].text`?",
+  "instructions": "Statement: <claim text>\n\nDoes the evidence in `sources` support the statement?",
   "criteria": {
-    "supports":    { "what": "Sources state or clearly imply the claim." },
-    "contradicts": { "what": "Sources state or clearly imply the claim is false." },
-    "not_found":   { "what": "Sources do not address the claim either way. Also use when the topic is absent." }
+    "supports":    "...",
+    "contradicts": "...",
+    "not_found":   "..."
   }
   // choice + probabilities + confidence
+},
+"c1_details": {
+  "type": "noul",
+  "instructions": "Statement: <claim text>\n\nDoes EVERY specific detail — names, numbers, dates, comparisons such as 'more than' or 'about' — exactly match the evidence in `sources`? ...",
+  // noul answer = P(all details match)
 }
 ```
 
-- 30 claims → 60 questions, one call. Over batch cap or 422 → split and retry half (SDK retries 429/529 already).
+- 30 claims → 90 questions, one call. Over batch cap or 422 → split and retry half (SDK retries 429/529 already).
 - Pin model `jev-1.13.0` (thresholds tuned against it). Constant in `verify.py`.
 - API key: env `TYPESAFE_API_KEY`. Missing → exit 3 with one-line hint.
 
@@ -101,7 +106,14 @@ elif choice == "contradicts":      → FAIL
 else:                              → REVIEW          # not_found
 ```
 
-`Verdict = {claim_id, claim_text, draft_line, kind, p_checkable?, choice?, probabilities, confidence, evidence?}`
+Then safeguards (`apply_safeguards`, pure) — demote `PASS` → `REVIEW` when:
+
+- `details_p < 0.5` (detail-gate Noul says some detail drifted), or
+- `missing_numbers(claim, sources)` non-empty — claim numbers absent from every source (regex extraction, separator-normalized; no model involved).
+
+FAIL/REVIEW/UNCHECKABLE pass through untouched.
+
+`Verdict = {claim_id, claim_text, draft_line, kind, p_checkable?, choice?, probabilities, confidence, details_p?, missing_numbers}`
 
 Evidence snippet v0.1: none auto-extracted — show top-1 "why" as the choice's probability distribution (`supports 0.91 / contradicts 0.02 / not_found 0.07`). Real source-span extraction = v0.2 (span-selection cookbook). Report column renders this distribution; label it "P(supports/contradicts/not_found)".
 

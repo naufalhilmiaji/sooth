@@ -54,16 +54,16 @@ sooth --source policy.md --text draft.md --format plain
 ## How it works
 
 1. Draft is split into claims (one sentence each).
-2. Each claim gets two questions to Jev, all fanned out in parallel batches: *is this checkable?* and *does the source support it?* (`supports` / `contradicts` / `not_found`).
-3. Verdicts are mapped in code: uncheckable → `UNCHECKABLE`; low confidence → `REVIEW`; then `PASS` / `FAIL`.
+2. Each claim gets three questions to Jev, all fanned out in parallel batches: *is this checkable?*, *does the source support it?* (`supports` / `contradicts` / `not_found`), and *do all details match exactly?*
+3. Verdicts are mapped in code: uncheckable → `UNCHECKABLE`; low confidence → `REVIEW`; then `PASS` / `FAIL`. Safeguards demote `PASS` to `REVIEW` when details drift or claim numbers are absent from the source (checked in plain code).
 4. The report shows the full probability distribution per claim — not just a label.
 
 The decision logic lives in [`src/sooth/verify.py`](src/sooth/verify.py) in a dozen readable lines. Change thresholds and rules there, not in prompts.
 
 ## Known limits (alpha)
 
-- Subtle numeric drift can pass — "about 74%" flipped to "over 74%" slipped through testing. Loud fabrications and wrong numbers are caught reliably.
-- A wrong detail glued to a true sentence (compound claim) can slip through — the true clause dominates the judgment.
+- Safeguards catch most drift and smuggling: claim numbers absent from the source demote `PASS` to `REVIEW`, and a detail-match gate flags altered hedges ("about 74%" → "over 74%"). Not perfect — read the `Why` column before trusting a verdict.
+- Derived numbers (totals, values computed outside the source) look "missing" and land in `REVIEW`.
 - Source + questions must fit ~64k tokens — split long documents yourself.
 
 ## Development

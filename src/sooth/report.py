@@ -17,9 +17,14 @@ def bar(p: float, width: int = _BAR_WIDTH) -> str:
 def _why(v: Verdict) -> str:
     if v.kind == UNCHECKABLE:
         return f"P(checkable)={v.p_checkable:.2f}"
-    if not v.probabilities:
-        return ""
-    return " / ".join(f"{k} {p:.2f}" for k, p in v.probabilities.items())
+    parts = []
+    if v.probabilities:
+        parts.append(" / ".join(f"{k} {p:.2f}" for k, p in v.probabilities.items()))
+    if v.details_p is not None and v.details_p < 1.0:
+        parts.append(f"details {v.details_p:.2f}")
+    if v.missing_numbers:
+        parts.append("missing #s: " + ", ".join(v.missing_numbers))
+    return " · ".join(parts)
 
 
 def _p(v: Verdict) -> float:
@@ -93,6 +98,8 @@ def log_record(result: VerifyResult, threshold: float, sources: list[str], draft
                 "choice": v.choice,
                 "probabilities": dict(v.probabilities),
                 "confidence": v.confidence,
+                "details_p": v.details_p,
+                "missing_numbers": list(v.missing_numbers),
             }
             for v in result.verdicts
         ],

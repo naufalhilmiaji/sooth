@@ -20,9 +20,11 @@ from sooth.verify import (  # noqa: E402
     UNCHECKABLE,
     Verdict,
     VerifyResult,
+    apply_safeguards,
     build_questions,
     build_state,
     map_verdict,
+    missing_numbers,
 )
 
 
@@ -106,11 +108,32 @@ def test_verdict_threshold_boundary_inclusive():
 def test_builders_two_questions_per_claim():
     claims = split_claims("A concrete claim about billing.\nAnother concrete claim about refunds.")
     q = build_questions(claims)
-    assert set(q) == {"c1_checkable", "c1_verdict", "c2_checkable", "c2_verdict"}
+    assert set(q) == {
+        "c1_checkable", "c1_verdict", "c1_details",
+        "c2_checkable", "c2_verdict", "c2_details",
+    }
     assert q["c1_checkable"]["type"] == "noul" and q["c1_verdict"]["type"] == "choice"
     state = build_state(claims, [("a.md", "text")])
     assert state["sources"][0] == {"name": "a.md", "text": "text"}
     assert state["claims"][0]["text"] == claims[0].text
+
+
+def test_missing_numbers_flags_smuggled_values():
+    sources = ["Rights issue at Rp 53. Drop about 74% to reach 50. Stock at Rp 69."]
+    assert missing_numbers("BNBR rights issue at Rp 53.", sources) == []
+    assert missing_numbers("DEWA is priced at about Rp 110 today.", sources) == ["110"]
+    # decimal commas and dots normalize: 27,5 matches 27,5; 5.000 matches 5000
+    assert missing_numbers("Fell 27,5% from Rp 5.000.", ["Down 27,5% from Rp 5000."]) == []
+
+
+def test_apply_safeguards_demotes_pass():
+    c = split_claims("Vague praise for the team.")[0]
+    base = map_verdict(c, 1.0, "supports", {"supports": 0.9}, 0.9, 0.7)
+    assert apply_safeguards(base, 0.9, []).kind == PASS
+    assert apply_safeguards(base, 0.3, []).kind == REVIEW
+    assert apply_safeguards(base, 0.9, ["110"]).kind == REVIEW
+    fail = map_verdict(c, 1.0, "contradicts", {"contradicts": 0.9}, 0.9, 0.7)
+    assert apply_safeguards(fail, 0.1, ["99"]).kind == FAIL  # FAIL stays FAIL
 
 
 # --- report ---
