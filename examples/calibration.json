@@ -1,0 +1,39 @@
+{
+  "threshold": 0.7,
+  "min_correct": 24,
+  "max_confident_wrong_fail_as_pass": 0,
+  "cases": [
+    {"source": ["news-1.md"], "claim": "Batas bawah harga saham di pasar reguler turun menjadi Rp 1 per saham mulai 28 September 2026.", "expected": "PASS", "note": "light paraphrase"},
+    {"source": ["news-1.md"], "claim": "Menurut Muhammad Thoriq Fadilla, aturan batas harga minimum berlaku untuk seluruh saham di BEI.", "expected": "PASS", "note": "paraphrase, drop affiliation"},
+    {"source": ["news-1.md"], "claim": "BUMI pernah berada di level Rp 50 sepanjang Oktober 2015 hingga Juni 2016.", "expected": "PASS", "note": "near-verbatim detail"},
+    {"source": ["news-1.md"], "claim": "Saham VIVA disuspensi di harga Rp 50.", "expected": "FAIL", "note": "flip: 38 → 50"},
+    {"source": ["news-1.md"], "claim": "Rights issue BNBR dilaksanakan di harga Rp 33.", "expected": "FAIL", "note": "flip: 53 → 33"},
+    {"source": ["news-1.md"], "claim": "BUMI hanya perlu turun sekitar 10% untuk mencapai level Rp 50.", "expected": "FAIL", "note": "flip: ~74% → 10%"},
+    {"source": ["news-1.md"], "claim": "BEI menetapkan batas atas harga saham Rp 5.000 per saham.", "expected": "REVIEW", "note": "invention, source silent"},
+    {"source": ["news-1.md"], "claim": "Aturan baru ini juga berlaku untuk pasar pengembangan dan pasar negosiasi.", "expected": "REVIEW", "note": "invention, scope extension"},
+    {"source": ["news-1.md"], "claim": "Aturan baru BEI sangat merugikan investor ritel.", "expected": "UNCHECKABLE", "note": "opinion"},
+    {"source": ["news-1.md"], "claim": "Saham Grup Bakrie adalah investasi terbaik tahun ini.", "expected": "UNCHECKABLE", "note": "opinion"},
+
+    {"source": ["policy.md"], "claim": "Refunds can be requested within 30 days of delivery.", "expected": "PASS", "note": "light paraphrase"},
+    {"source": ["policy.md"], "claim": "Unused items in their original packaging qualify for a refund.", "expected": "PASS", "note": "reordered paraphrase"},
+    {"source": ["policy.md"], "claim": "The shipping fee cannot be refunded.", "expected": "PASS", "note": "deep paraphrase"},
+    {"source": ["policy.md"], "claim": "Customers have 60 days to request a refund.", "expected": "FAIL", "note": "flip: 30 → 60 days"},
+    {"source": ["policy.md"], "claim": "Shipping fees are refunded along with the order.", "expected": "FAIL", "note": "flip: non-refundable"},
+    {"source": ["policy.md"], "claim": "Sale items marked final sale can be returned within 30 days.", "expected": "FAIL", "note": "flip: cannot → can"},
+    {"source": ["policy.md"], "claim": "Approved refunds are issued as store credit only.", "expected": "FAIL", "note": "flip: original payment method"},
+    {"source": ["policy.md"], "claim": "Refunds are also available for digital gift cards.", "expected": "REVIEW", "note": "invention, source silent"},
+    {"source": ["policy.md"], "claim": "Acme offers free return shipping for all orders.", "expected": "REVIEW", "note": "invention, source silent"},
+    {"source": ["policy.md"], "claim": "Acme's refund process is very customer-friendly.", "expected": "UNCHECKABLE", "note": "opinion"},
+
+    {"source": ["pricing.md"], "claim": "The Pro plan costs $19 per month per user.", "expected": "PASS", "note": "near-verbatim"},
+    {"source": ["pricing.md"], "claim": "Paid plans include a 14-day free trial.", "expected": "PASS", "note": "paraphrase, drop 'All'"},
+    {"source": ["pricing.md"], "claim": "Business customers get 50,000 emails per month.", "expected": "PASS", "note": "paraphrase"},
+    {"source": ["pricing.md"], "claim": "Enterprise plans are custom-priced.", "expected": "PASS", "note": "paraphrase"},
+    {"source": ["pricing.md"], "claim": "The Free plan includes 500 emails per month.", "expected": "FAIL", "note": "flip: 100 → 500"},
+    {"source": ["pricing.md"], "claim": "Yearly billing saves 10%.", "expected": "FAIL", "note": "flip: 20% → 10%"},
+    {"source": ["pricing.md"], "claim": "SAML SSO is included in the Pro plan.", "expected": "FAIL", "note": "flip: Business-only feature"},
+    {"source": ["pricing.md"], "claim": "Mailflow offers a nonprofit discount.", "expected": "REVIEW", "note": "invention, source silent"},
+    {"source": ["pricing.md"], "claim": "A company with one Free and one Pro mailbox can send 10,100 emails per month.", "expected": "REVIEW", "note": "true derived number (100+10000), absent from source — safeguard edge"},
+    {"source": ["pricing.md"], "claim": "Mailflow is the best email tool for startups.", "expected": "UNCHECKABLE", "note": "opinion"}
+  ]
+}

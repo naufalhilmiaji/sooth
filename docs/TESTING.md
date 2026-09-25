@@ -22,14 +22,14 @@ Entry bar: `python -m tests.test_core` exits 0 on a clean tree. This is the one 
 - Pass when: process exits with code matching expected verdicts (1 FAIL present → exit 1), report table has 3 rows, `--log /tmp/t.jsonl` has exactly 1 line with `model` = pinned version.
 - Script it as `tests/smoke.sh` (5 lines). Not run in unit CI. Skip entirely when `TYPESAFE_API_KEY` unset.
 
-## 3. Accuracy calibration (human, pre-release)
+## 3. Accuracy calibration (live, labeled set)
 
 Goal from PRD: ≥ 24/30 correct on a labeled set, zero confident-wrong `PASS` on contradicted claims.
 
-1. Write 30 claims against 3–5 real source docs: 10 supported (paraphrase depth varies), 10 contradicted (subtle flips: "3 days" → "3 weeks"), 10 absent/opinion ("customers love it").
-2. Run once at threshold 0.7. Record confusion matrix (verdict × truth).
-3. Adjust `--confidence` default if needed; re-run. Never move threshold to hide a confident-wrong PASS — fix question wording instead (`instructions`/`criteria` in `verify.py`).
-4. Freeze: save labeled set + matrix as `examples/calibration.md` (table only, no code). Thresholds are tuned to `jev-1.13.0`; bump model → re-run this layer.
+- Labeled set: `examples/calibration.json` — 30 claims across `news-1.md`, `policy.md`, `pricing.md` (10 supported / 10 contradicted / 10 absent-or-opinion, each with an `expected` verdict and a note).
+- Runner: `PYTHONPATH=src python3 tests/calibrate.py [--confidence T]` — batches live Jev calls, prints the confusion matrix, exits 0 only when the bar is met.
+- Frozen matrix + notes: `examples/calibration.md` (threshold 0.7, `jev-1.13.0`, 30/30).
+- Never move the threshold to hide a confident-wrong `PASS` — fix question wording instead (`instructions`/`criteria` in `verify.py`). Bump model version → re-run this layer.
 
 ## 4. Manual UX check (10 min)
 

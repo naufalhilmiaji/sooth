@@ -73,6 +73,7 @@ pip install -e ".[dev]"
 python3 tests/test_core.py     # pure checks, no network
 pytest                         # same suite
 bash tests/smoke.sh            # live smoke (needs TYPESAFE_API_KEY)
+PYTHONPATH=src python3 tests/calibrate.py   # live calibration, 30 labeled claims
 ```
 
 Docs: [PRD](docs/PRD.md) · [Design](docs/DESIGN.md) · [Testing](docs/TESTING.md)
