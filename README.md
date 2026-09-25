@@ -1,14 +1,22 @@
 # Sooth
 
-Verify AI-generated text against source material. Claim-by-claim **PASS / FAIL / REVIEW**, with calibrated probabilities you can act on in CI.
+**LLMs generate. Sooth verifies.**
 
-Built on [Jev](https://docs.typesafe.ai) (TypeSafe System One) — typed judgments and probabilities instead of generated prose. Every verdict shows its probability distribution, and the combination rules are plain code you can read. No black box.
+Claim-by-claim fact-checking for AI output, designed for CI. Sooth checks every sentence in a draft against your source material and returns `PASS` / `FAIL` / `REVIEW` with calibrated probabilities and the exact source line behind each verdict.
 
+[![PyPI](https://img.shields.io/pypi/v/sooth.svg)](https://pypi.org/project/sooth/)
+[![Python](https://img.shields.io/pypi/pyversions/sooth.svg)](https://pypi.org/project/sooth/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/naufalhilmiaji/sooth/blob/main/LICENSE)
+[![CI](https://github.com/naufalhilmiaji/sooth/actions/workflows/ci.yml/badge.svg)](https://github.com/naufalhilmiaji/sooth/actions/workflows/ci.yml)
+
+## See it catch a hallucination
+
+```bash
+pip install sooth
+sooth demo        # no API key needed
 ```
-sooth --source policy.md --text draft-reply.md
-```
 
-Real output (planted errors in the draft vs a news source):
+Real output — seven claims in an AI-written news summary, three numbers quietly wrong:
 
 ```
 # Sooth
@@ -23,14 +31,18 @@ Real output (planted errors in the draft vs a news source):
 | 7 | Para investor ritel sangat senang dengan aturan baru ini. | ➖ UNCHECKABLE | ██░░░░░░ 0.24 | P(checkable)=0.24 |  |
 ```
 
+Every verdict carries its probability distribution and the source span it was judged against. When Sooth is unsure, it says `REVIEW` instead of guessing.
+
 ## Why
 
-AI writes fast, nobody checks. Claims ship wrong. Sooth checks each claim against the evidence you give it — and when it is unsure, it says `REVIEW` instead of guessing.
+AI writes fast, nobody checks. Claims ship wrong — usually a number, a hedge, or a name that drifted. Asking another LLM "is this right?" just produces more prose.
+
+Sooth takes a different bet: **the model makes typed judgments, code makes the decision.** Every rule that turns a probability into a verdict is a readable line of Python, not a prompt.
 
 ## Install
 
 ```bash
-pip install sooth          # or: pip install -e ".[dev]" from source
+pip install sooth
 export TYPESAFE_API_KEY=...       # get one at console.typesafe.ai
 ```
 
@@ -50,14 +62,49 @@ sooth --source policy.md --text draft.md --format plain
 #   --log FILE       append full judgment trace (one JSONL line per run)
 ```
 
+Wire it into CI as a quality gate for generated content:
+
+```yaml
+- name: Verify AI output
+  run: sooth --source docs/policy.md --text generated-reply.md
+  env:
+    TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+```
+
 ## How it works
 
 1. Draft is split into claims (one sentence each).
-2. Each claim gets three questions to Jev, all fanned out in parallel batches: *is this checkable?*, *does the source support it?* (`supports` / `contradicts` / `not_found`), and *do all details match exactly?*
+2. Each claim gets four questions to Jev, fanned out in parallel batches: *is this checkable?*, *does the source support it?* (`supports` / `contradicts` / `not_found`), *do all details match exactly?*, and *which source span is the evidence?*
 3. Verdicts are mapped in code: uncheckable → `UNCHECKABLE`; low confidence → `REVIEW`; then `PASS` / `FAIL`. Safeguards demote `PASS` to `REVIEW` when details drift or claim numbers are absent from the source (checked in plain code).
 4. The report shows the full probability distribution per claim — not just a label.
 
-The decision logic lives in [`src/sooth/verify.py`](src/sooth/verify.py) in a dozen readable lines. Change thresholds and rules there, not in prompts.
+The decision logic lives in [`src/sooth/verify.py`](https://github.com/naufalhilmiaji/sooth/blob/main/src/sooth/verify.py) in a dozen readable lines. Change thresholds and rules there, not in prompts.
+
+Judgments come from [Jev](https://docs.typesafe.ai) (TypeSafe System One), which returns typed distributions instead of generated prose.
+
+## Why not just use an LLM judge?
+
+Not claiming Sooth is universally more accurate. Claiming it gives you **architectural guarantees** a prompt cannot:
+
+| | Sooth | Generic LLM judge |
+|---|-------|-------------------|
+| Claim-level verification | ✅ | Sometimes |
+| Source span behind each verdict | ✅ | Sometimes |
+| `PASS` / `FAIL` / `REVIEW` | ✅ fixed vocabulary | Generated labels |
+| Probability distribution | ✅ | Usually none |
+| Verdict rules in readable code | ✅ | Prompt-dependent |
+| CI exit codes | ✅ | ❌ |
+| Audit log (`--log` JSONL) | ✅ | DIY |
+
+## Who it's for
+
+Developers building systems that generate text from trusted material:
+
+- **RAG pipelines** — retrieved the right document, still wrote the wrong number
+- **AI agents** — before an agent's reply reaches a human
+- **Support / ops copilots** — policy-backed answers, checked against the policy
+- **Report & summary generation** — figures that must match the source
+- **Compliance workflows** — evidence trail for every claim, not vibes
 
 ## Known limits (alpha)
 
@@ -75,11 +122,13 @@ bash tests/smoke.sh            # live smoke (needs TYPESAFE_API_KEY)
 PYTHONPATH=src python3 tests/calibrate.py   # live calibration, 30 labeled claims
 ```
 
-Docs: [PRD](docs/PRD.md) · [Design](docs/DESIGN.md) · [Testing](docs/TESTING.md)
+Docs: [PRD](https://github.com/naufalhilmiaji/sooth/blob/main/docs/PRD.md) · [Design](https://github.com/naufalhilmiaji/sooth/blob/main/docs/DESIGN.md) · [Testing](https://github.com/naufalhilmiaji/sooth/blob/main/docs/TESTING.md)
 
 ## Roadmap
 
-- v0.2 shipped: source-span evidence (the exact source line behind each verdict, shown in the report)
+- v0.2.2 shipped: `sooth demo` (offline, no API key)
+- v0.2.1 shipped: source-span evidence, published on PyPI
+- GitHub Action
 - later: hosted web app — paste UI, history, team review queues
 
 ## License

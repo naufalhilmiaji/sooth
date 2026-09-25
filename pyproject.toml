@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sooth"
-version = "0.2.1"
+version = "0.2.2"
 description = "Verify AI-generated text against source material. Claim-by-claim trust reports powered by Jev (TypeSafe System One)."
 readme = "README.md"
 license = { text = "MIT" }

@@ -9,8 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sooth.claims import split_claims
-from sooth.report import exit_code, log_record, render_markdown, render_plain
+from sooth.report import exit_code, log_record, render_markdown, render_plain, verdicts_from_record
 from sooth.verify import DEFAULT_THRESHOLD, VerifyError, verify_claims
+
+DEMO_RECORD = Path(__file__).with_name("demo.json")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -19,9 +21,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Verify AI-generated text against source material. "
                     "Each claim gets PASS / FAIL / REVIEW with calibrated probabilities.",
     )
-    p.add_argument("--source", action="append", required=True, metavar="FILE",
+    p.add_argument("command", nargs="?", choices=["demo"],
+                   help="run the offline demo against a bundled recorded run (no API key)")
+    p.add_argument("--source", action="append", metavar="FILE",
                    help="ground-truth source file (repeatable)")
-    p.add_argument("--text", required=True, metavar="FILE", help="AI-generated draft to check")
+    p.add_argument("--text", metavar="FILE", help="AI-generated draft to check")
     p.add_argument("--confidence", type=float, default=DEFAULT_THRESHOLD, metavar="T",
                    help=f"REVIEW below this confidence (default {DEFAULT_THRESHOLD})")
     p.add_argument("--format", choices=["md", "plain"], default="md", help="report format")
@@ -30,8 +34,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+def run_demo(fmt: str) -> int:
+    """Replay a bundled judgment trace through the real report code. No network."""
+    record = json.loads(DEMO_RECORD.read_text(encoding="utf-8"))
+    print(
+        "demo: replaying a recorded run "
+        f"({record['draft']} vs {', '.join(record['sources'])}) — no API key needed",
+        file=sys.stderr,
+    )
+    verdicts = verdicts_from_record(record)
+    report = (render_markdown if fmt == "md" else render_plain)(
+        verdicts, threshold=record["threshold"]
+    )
+    print(report, end="")
+    return exit_code(verdicts)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.command == "demo":
+        return run_demo(args.format)
+    if not args.source or not args.text:
+        print("error: --source and --text are required (or try: sooth demo)", file=sys.stderr)
+        return 3
     try:
         sources = [(path, Path(path).read_text(encoding="utf-8")) for path in args.source]
         draft = Path(args.text).read_text(encoding="utf-8")
