@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
-from sooth.claims import Claim  # noqa: E402
-from sooth.verify import PASS, verify_claims  # noqa: E402
+from sooth.claims import Claim
+from sooth.verify import PASS, verify_claims
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -52,7 +52,8 @@ def main() -> int:
     print(f"threshold {threshold} — score {correct}/{total} (need {data['min_correct']})\n")
     keys = ("PASS", "FAIL", "REVIEW", "UNCHECKABLE")
     matrix = Counter((case["expected"], v.kind) for case, v in rows)
-    print(f"{'exp\\got':<12}" + "".join(f"{k:>10}" for k in keys))
+    corner = "exp\\got"
+    print(f"{corner:<12}" + "".join(f"{k:>10}" for k in keys))
     for exp in keys:
         print(f"{exp:<12}" + "".join(f"{matrix[(exp, got)]:>10}" for got in keys))
     print()
