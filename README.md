@@ -16,6 +16,8 @@ pip install sooth
 sooth demo        # no API key needed
 ```
 
+![Sooth checking an AI-written news summary claim by claim: two claims pass, three fail on fabricated numbers, one goes to review, one is uncheckable](assets/sooth-demo.gif)
+
 Real output — seven claims in an AI-written news summary, three numbers quietly wrong:
 
 ```
