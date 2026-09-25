@@ -25,10 +25,18 @@ Real output — seven claims in an AI-written news summary, three numbers quietl
 
 | # | Claim | Verdict | P | Why (P distribution) | Evidence |
 |---|-------|---------|---|----------------------|----------|
-| 3 | BNBR baru menuntaskan rights issue bernilai besar di harga Rp 33. | ❌ FAIL | ████████ 1.00 | contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 33 | `examples/news-1.md:25` "Saham ini juga baru menyelesaikan rights issue dalam juml…" |
-| 5 | BUMI hanya perlu turun sekitar 10% untuk menyentuh level Rp 50. | ❌ FAIL | ████████ 1.00 | contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 10 | `examples/news-1.md:23` "Adapun PT Bumi Resources Tbk (BUMI) di sekitar Rp192 haru…" |
-| 6 | BEI juga menetapkan batas atas harga saham Rp 5.000 per saham. | ⚠️ REVIEW | ████████ 1.00 | contradicts 0.00 / not_found 1.00 / supports 0.00 · details 0.02 · missing #s: 5.000 |  |
-| 7 | Para investor ritel sangat senang dengan aturan baru ini. | ➖ UNCHECKABLE | ██░░░░░░ 0.24 | P(checkable)=0.24 |  |
+| 1 | Aturan baru BEI menurunkan batas bawah harga saham menjadi Rp 1 per saham mulai 28 September 2026. | ✅ PASS | ████████ 1.00 | supports 1.00 / not_found 0.00 / contradicts 0.00 · details 0.98 | `examples/news-1.md:3` "Saham-saham Grup Bakrie kembali menjadi sorotan menjelang…" |
+| 2 | Menurut analis Bumiputera Sekuritas, aturan ini berlaku untuk seluruh emiten di BEI. | ✅ PASS | ████████ 1.00 | supports 1.00 / not_found 0.00 / contradicts 0.00 · details 0.82 | `examples/news-1.md:7` "Ia menyebut aturan ini berlaku untuk seluruh saham di BEI…" |
+| 3 | BNBR baru menuntaskan rights issue bernilai besar di harga Rp 33. | ❌ FAIL | ████████ 1.00 | supports 0.00 / not_found 0.00 / contradicts 1.00 · details 0.01 · missing #s: 33 | `examples/news-1.md:25` "Saham ini juga baru menyelesaikan rights issue dalam juml…" |
+| 4 | Saham VIVA disuspensi di harga Rp 50. | ❌ FAIL | ████████ 1.00 | supports 0.00 / not_found 0.00 / contradicts 1.00 · details 0.02 |  |
+| 5 | BUMI hanya perlu turun sekitar 10% untuk menyentuh level Rp 50. | ❌ FAIL | ████████ 1.00 | supports 0.00 / not_found 0.00 / contradicts 1.00 · details 0.01 · missing #s: 10 | `examples/news-1.md:23` "Adapun PT Bumi Resources Tbk (BUMI) di sekitar Rp192 haru…" |
+| 6 | BEI juga menetapkan batas atas harga saham Rp 5.000 per saham di pasar reguler. | ⚠️ REVIEW | ████████ 1.00 | supports 0.00 / not_found 1.00 / contradicts 0.00 · details 0.02 · missing #s: 5.000 |  |
+| 7 | Para investor ritel sangat senang dengan aturan baru ini. | ➖ UNCHECKABLE | ██░░░░░░ 0.25 | P(checkable)=0.25 |  |
+
+## Needs review
+
+- line 13: BEI juga menetapkan batas atas harga saham Rp 5.000 per saham di pasar reguler.
+- line 15: Para investor ritel sangat senang dengan aturan baru ini.
 ```
 
 Every verdict carries its probability distribution and the source span it was judged against. When Sooth is unsure, it says `REVIEW` instead of guessing.
