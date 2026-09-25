@@ -1,0 +1,35 @@
+name: "Sooth"
+description: "Claim-by-claim verification of AI-generated text against source material. Fails CI on hallucinations."
+author: "Naufal Hilmiaji"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  source:
+    description: "Ground-truth source file(s). Repeat by separating paths with newlines."
+    required: true
+  text:
+    description: "AI-generated draft to check."
+    required: true
+  confidence:
+    description: "REVIEW below this confidence."
+    required: false
+    default: "0.7"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install sooth
+      shell: bash
+      run: python -m pip install --quiet sooth
+    - name: Verify draft
+      shell: bash
+      env:
+        SOOTH_SOURCE: ${{ inputs.source }}
+        SOOTH_TEXT: ${{ inputs.text }}
+        SOOTH_CONFIDENCE: ${{ inputs.confidence }}
+      run: bash "$GITHUB_ACTION_PATH/action.sh"

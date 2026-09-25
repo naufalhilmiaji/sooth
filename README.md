@@ -70,14 +70,21 @@ sooth --source policy.md --text draft.md --format plain
 #   --log FILE       append full judgment trace (one JSONL line per run)
 ```
 
-Wire it into CI as a quality gate for generated content:
+Use it in CI as a quality gate for generated content:
 
 ```yaml
 - name: Verify AI output
-  run: sooth --source docs/policy.md --text generated-reply.md
+  uses: naufalhilmiaji/sooth@v0.2.3
+  with:
+    source: docs/policy.md
+    text: generated-reply.md
   env:
     TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 ```
+
+`source` takes newline-separated paths when you have several documents. The step fails the build on any `FAIL` — and on any `REVIEW`, so add `continue-on-error: true` if you only want to block on hard contradictions. The full report is appended to the job summary.
+
+Prefer plain shell? `sooth --source policy.md --text draft.md` gives the same exit codes.
 
 ## How it works
 
@@ -134,9 +141,9 @@ Docs: [PRD](https://github.com/naufalhilmiaji/sooth/blob/main/docs/PRD.md) · [D
 
 ## Roadmap
 
+- v0.2.3 shipped: GitHub Action — CI quality gate in one `uses:` line
 - v0.2.2 shipped: `sooth demo` (offline, no API key)
 - v0.2.1 shipped: source-span evidence, published on PyPI
-- GitHub Action
 - later: hosted web app — paste UI, history, team review queues
 
 ## License

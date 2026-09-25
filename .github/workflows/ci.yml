@@ -19,3 +19,4 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check src tests
       - run: pytest
+      - run: bash tests/test_action.sh
