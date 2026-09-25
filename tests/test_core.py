@@ -11,9 +11,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
-from sooth.claims import split_claims, split_segments  # noqa: E402
-from sooth.report import bar, exit_code, log_record, render_markdown  # noqa: E402
-from sooth.verify import (  # noqa: E402
+from sooth.claims import split_claims, split_segments
+from sooth.report import bar, exit_code, log_record, render_markdown
+from sooth.verify import (
     FAIL,
     PASS,
     REVIEW,

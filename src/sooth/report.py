@@ -48,9 +48,11 @@ def _evidence(v: Verdict) -> str:
 def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
     t = counts(verdicts)
     lines = [
-        f"# Sooth\n",
-        f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
-        f" — threshold {threshold:.2f}\n",
+        "# Sooth\n",
+        (
+            f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
+            f" — threshold {threshold:.2f}\n"
+        ),
         "| # | Claim | Verdict | P | Why (P distribution) | Evidence |",
         "|---|-------|---------|---|----------------------|----------|",
     ]
