@@ -5,19 +5,21 @@ Frozen results of `examples/calibration.json` run through `tests/calibrate.py`.
 - **Date:** 2026-09-25
 - **Model:** `jev-1.13.0` (pinned)
 - **Threshold:** 0.7
-- **Score:** 30/30 (bar: ≥ 24/30, zero confident-wrong `PASS` on contradicted claims)
+- **Score:** 30/30 first run; 29/30 after v0.2 evidence feature (bar: ≥ 24/30, zero confident-wrong `PASS` on contradicted claims — met both runs)
 - **Runner:** `PYTHONPATH=src python3 tests/calibrate.py`
 
-## Matrix (rows = expected, cols = got)
+## Matrix (rows = expected, cols = got) — latest run
 
 | exp\got | PASS | FAIL | REVIEW | UNCHECKABLE |
 |---------|------|------|--------|-------------|
 | PASS | 10 | 0 | 0 | 0 |
 | FAIL | 0 | 10 | 0 | 0 |
-| REVIEW | 0 | 0 | 6 | 0 |
+| REVIEW | 0 | 0 | 5 | 1 |
 | UNCHECKABLE | 0 | 0 | 0 | 4 |
 
-Perfect diagonal. Confident-wrong PASS on contradicted: **0**.
+Confident-wrong PASS on contradicted: **0** (both runs).
+
+Variance note: the invented "batas atas Rp 5.000" claim flips between `REVIEW` (not_found) and `UNCHECKABLE` across runs — its checkable probability sits on the 0.5 floor. Both outcomes mean "don't act", so the distinction is harmless; recorded rather than tuned away.
 
 ## Composition
 

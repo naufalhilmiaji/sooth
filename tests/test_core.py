@@ -11,9 +11,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
-from sooth.claims import split_claims
-from sooth.report import bar, exit_code, log_record, render_markdown
-from sooth.verify import (
+from sooth.claims import split_claims, split_segments  # noqa: E402
+from sooth.report import bar, exit_code, log_record, render_markdown  # noqa: E402
+from sooth.verify import (  # noqa: E402
     FAIL,
     PASS,
     REVIEW,
@@ -21,8 +21,10 @@ from sooth.verify import (
     Verdict,
     VerifyResult,
     apply_safeguards,
+    attach_evidence,
     build_questions,
     build_state,
+    evidence_candidates,
     map_verdict,
     missing_numbers,
 )
@@ -35,6 +37,7 @@ def v(kind: str, **kw) -> Verdict:
 
 
 # --- claims.split_claims ---
+
 
 def test_split_keeps_decimals_and_counts_lines():
     text = "# Title\nRefunds take 3.5 days.\n\nWe support Bitcoin payments here.\n"
@@ -80,14 +83,21 @@ def test_split_bold_handling():
 
 # --- verify.map_verdict ---
 
+
 def test_verdict_uncheckable_below_floor():
     z = map_verdict(split_claims("Vague praise for the team.")[0], 0.2, "not_found", {}, 0.9, 0.7)
     assert z.kind == UNCHECKABLE
 
 
 def test_verdict_review_below_threshold():
-    z = map_verdict(split_claims("Vague praise for the team.")[0], 0.9, "supports",
-                    {"supports": 0.5, "contradicts": 0.3, "not_found": 0.2}, 0.55, 0.7)
+    z = map_verdict(
+        split_claims("Vague praise for the team.")[0],
+        0.9,
+        "supports",
+        {"supports": 0.5, "contradicts": 0.3, "not_found": 0.2},
+        0.55,
+        0.7,
+    )
     assert z.kind == REVIEW
 
 
@@ -105,17 +115,63 @@ def test_verdict_threshold_boundary_inclusive():
 
 # --- verify builders ---
 
+
 def test_builders_two_questions_per_claim():
     claims = split_claims("A concrete claim about billing.\nAnother concrete claim about refunds.")
-    q = build_questions(claims)
+    segs = split_segments("Refunds take three days.", "a.md")
+    cands = {c.id: segs for c in claims}
+    q = build_questions(claims, cands)
     assert set(q) == {
-        "c1_checkable", "c1_verdict", "c1_details",
-        "c2_checkable", "c2_verdict", "c2_details",
+        "c1_checkable",
+        "c1_verdict",
+        "c1_details",
+        "c1_evidence",
+        "c2_checkable",
+        "c2_verdict",
+        "c2_details",
+        "c2_evidence",
     }
     assert q["c1_checkable"]["type"] == "noul" and q["c1_verdict"]["type"] == "choice"
-    state = build_state(claims, [("a.md", "text")])
+    assert "none" in q["c1_evidence"]["criteria"]
+    state = build_state(claims, [("a.md", "text")], segs)
     assert state["sources"][0] == {"name": "a.md", "text": "text"}
     assert state["claims"][0]["text"] == claims[0].text
+    assert state["segments"][0]["id"] == segs[0].id
+
+
+def test_split_segments_ids_and_sources():
+    segs = split_segments("First sentence here now.\nSecond sentence here now.", "x.md")
+    assert [(s.id, s.source, s.line) for s in segs] == [("s1", "x.md", 1), ("s2", "x.md", 2)]
+    more = split_segments("Third sentence here now.", "y.md", start_index=len(segs) + 1)
+    assert more[0].id == "s3"
+
+
+def test_evidence_candidates_prefer_number_match():
+    segs = [
+        split_segments("The sky is very blue today indeed.", "a.md")[0],
+        split_segments("BNBR rights issue was priced at Rp 53.", "a.md", 2)[0],
+        split_segments("Unrelated gardening tips for beginners.", "a.md", 3)[0],
+    ]
+    top = evidence_candidates("Rights issue BNBR at Rp 53 completed.", segs)
+    assert top[0].id == "s2"
+
+
+def test_evidence_candidates_word_overlap():
+    segs = [
+        split_segments("Stocks moved little in quiet trading this week overall.", "a.md")[0],
+        split_segments("Refund requests must reach support within thirty days.", "a.md", 2)[0],
+    ]
+    top = evidence_candidates("Refund requests within thirty days qualify for money back.", segs)
+    assert top[0].id == "s2"
+
+
+def test_attach_evidence():
+    c = split_claims("Vague praise for the team.")[0]
+    base = map_verdict(c, 1.0, "supports", {}, 0.9, 0.7)
+    seg = split_segments("Team delivered the project on time.", "a.md")[0]
+    v = attach_evidence(base, {seg.id: seg}, seg.id)
+    assert v.evidence_text == seg.text and v.evidence_line == 1 and v.evidence_source == "a.md"
+    assert attach_evidence(base, {seg.id: seg}, "none").evidence_text is None
 
 
 def test_missing_numbers_flags_smuggled_values():
@@ -138,14 +194,17 @@ def test_apply_safeguards_demotes_pass():
 
 # --- report ---
 
+
 def test_bar_length_proportional():
     assert bar(0.0) == "░" * 8 and bar(1.0) == "█" * 8 and len(bar(0.5)) == 8
 
 
 def test_render_all_claims_once_and_counts():
-    verdicts = [v(PASS, confidence=0.9, probabilities={"supports": 0.9}),
-                v(FAIL, claim_id="c2", confidence=0.87, probabilities={"contradicts": 0.87}),
-                v(REVIEW, claim_id="c3", confidence=0.54, probabilities={"not_found": 0.54})]
+    verdicts = [
+        v(PASS, confidence=0.9, probabilities={"supports": 0.9}),
+        v(FAIL, claim_id="c2", confidence=0.87, probabilities={"contradicts": 0.87}),
+        v(REVIEW, claim_id="c3", confidence=0.54, probabilities={"not_found": 0.54}),
+    ]
     out = render_markdown(verdicts, 0.7)
     assert "PASS 1 · FAIL 1 · REVIEW 1 · UNCHECKABLE 0" in out
     assert out.count("| 1 |") == 1 and out.count("| 2 |") == 1 and out.count("| 3 |") == 1

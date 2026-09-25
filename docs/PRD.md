@@ -38,7 +38,7 @@ sooth --source docs/policy.md --source tickets/t123.md --text draft-reply.md
 | 2 | We support Bitcoin. | ❌ FAIL | 0.87 | supports .03 / contradicts .87 / not_found .10 |
 | 3 | Customers love the change. | ⚠️ REVIEW | 0.54 | not found in sources |
 
-v0.1 "Why" = probability distribution. Source-snippet evidence = v0.2 (see `DESIGN.md`).
+"Why" = probability distribution. Evidence = the source span the model selected (`source:line` + snippet).
 
 Verdict rules (fixed, readable in code):
 

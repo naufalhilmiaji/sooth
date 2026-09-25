@@ -38,20 +38,25 @@ def counts(verdicts: list[Verdict]) -> dict[str, int]:
     return tallies
 
 
+def _evidence(v: Verdict) -> str:
+    if not v.evidence_text:
+        return ""
+    snippet = v.evidence_text if len(v.evidence_text) <= 60 else v.evidence_text[:57] + "…"
+    return f'`{v.evidence_source}:{v.evidence_line}` "{snippet}"'
+
+
 def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
     t = counts(verdicts)
     lines = [
-        "# Sooth\n",
-        (f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
-         f" — threshold {threshold:.2f}\n"),
-        "| # | Claim | Verdict | P | Why (P distribution) |",
-        "|---|-------|---------|---|----------------------|",
+        f"# Sooth\n",
+        f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
+        f" — threshold {threshold:.2f}\n",
+        "| # | Claim | Verdict | P | Why (P distribution) | Evidence |",
+        "|---|-------|---------|---|----------------------|----------|",
     ]
     for i, v in enumerate(verdicts, start=1):
         claim = v.claim_text.replace("|", "\\|")
-        lines.append(
-            f"| {i} | {claim} | {_MARK[v.kind]} | {bar(_p(v))} {_p(v):.2f} | {_why(v)} |"
-        )
+        lines.append(f"| {i} | {claim} | {_MARK[v.kind]} | {bar(_p(v))} {_p(v):.2f} | {_why(v)} | {_evidence(v)} |")
     needs = [v for v in verdicts if v.kind in (REVIEW, UNCHECKABLE)]
     if needs:
         lines += ["\n## Needs review\n"]
@@ -62,8 +67,10 @@ def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
 def render_plain(verdicts: list[Verdict], threshold: float) -> str:
     t = counts(verdicts)
     lines = [
-        (f"PASS {t[PASS]}  FAIL {t[FAIL]}  REVIEW {t[REVIEW]}  UNCHECKABLE {t[UNCHECKABLE]}"
-         f"  (threshold {threshold:.2f})")
+        (
+            f"PASS {t[PASS]}  FAIL {t[FAIL]}  REVIEW {t[REVIEW]}  UNCHECKABLE {t[UNCHECKABLE]}"
+            f"  (threshold {threshold:.2f})"
+        )
     ]
     for v in verdicts:
         lines.append(f"{_PLAIN[v.kind]:<11} {_p(v):.2f}  line {v.line}  {v.claim_text}")
@@ -100,6 +107,16 @@ def log_record(result: VerifyResult, threshold: float, sources: list[str], draft
                 "confidence": v.confidence,
                 "details_p": v.details_p,
                 "missing_numbers": list(v.missing_numbers),
+                "evidence": (
+                    {
+                        "id": v.evidence_id,
+                        "text": v.evidence_text,
+                        "line": v.evidence_line,
+                        "source": v.evidence_source,
+                    }
+                    if v.evidence_text
+                    else None
+                ),
             }
             for v in result.verdicts
         ],

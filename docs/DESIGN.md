@@ -67,7 +67,7 @@ One request per batch of ≤ 30 claims. State is shared; questions reference cla
 }
 ```
 
-Per claim, **three parallel questions** (fan-out pattern; statement text is embedded in the instructions):
+Per claim, **four parallel questions** (fan-out pattern; statement text is embedded in the instructions):
 
 ```jsonc
 "c1_checkable": {
@@ -89,10 +89,16 @@ Per claim, **three parallel questions** (fan-out pattern; statement text is embe
   "type": "noul",
   "instructions": "Statement: <claim text>\n\nDoes EVERY specific detail — names, numbers, dates, comparisons such as 'more than' or 'about' — exactly match the evidence in `sources`? ...",
   // noul answer = P(all details match)
+},
+"c1_evidence": {
+  "type": "choice",
+  "instructions": "Statement: <claim text>\n\nWhich candidate segment best supports or contradicts the statement? Full text of each id is in `segments`. Choose 'none' if no segment is relevant.",
+  "criteria": { "s12": "<first 80 chars of candidate>", "...": "…", "none": "No segment is relevant to the statement." }
+  // code pre-filters ~6 candidate ids per claim (word overlap + number hits)
 }
 ```
 
-- 30 claims → 90 questions, one call. Over batch cap or 422 → split and retry half (SDK retries 429/529 already).
+- 30 claims → 120 questions, one call. Over batch cap or 422 → split and retry half (SDK retries 429/529 already).
 - Pin model `jev-1.13.0` (thresholds tuned against it). Constant in `verify.py`.
 - API key: env `TYPESAFE_API_KEY`. Missing → exit 3 with one-line hint.
 
@@ -115,11 +121,7 @@ FAIL/REVIEW/UNCHECKABLE pass through untouched.
 
 `Verdict = {claim_id, claim_text, draft_line, kind, p_checkable?, choice?, probabilities, confidence, details_p?, missing_numbers}`
 
-Evidence snippet v0.1: none auto-extracted — show top-1 "why" as the choice's probability distribution (`supports 0.91 / contradicts 0.02 / not_found 0.07`). Real source-span extraction = v0.2 (span-selection cookbook). Report column renders this distribution; label it "P(supports/contradicts/not_found)".
-
-```python
-# ponytail: evidence is a distribution, not a source quote; add span extraction when users ask "where?"
-```
+Evidence (v0.2, pre-parsed selection pattern): sources are split into sentence `segments`; code ranks ~6 candidates per claim (word overlap, numbers weighted ×3); a per-claim Choice selects the best span (`none` allowed). Report shows `source:line` + snippet. Best-effort — `none` is valid when no span matches.
 
 (If PRD table showed source snippets — that is v0.2. v0.1 report substitutes distribution; PRD example is target UX.)
 

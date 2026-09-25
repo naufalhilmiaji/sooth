@@ -80,7 +80,7 @@ Docs: [PRD](docs/PRD.md) · [Design](docs/DESIGN.md) · [Testing](docs/TESTING.m
 
 ## Roadmap
 
-- v0.2: source-span evidence (the exact sentence that backs each claim)
+- v0.2 shipped: source-span evidence (the exact source line behind each verdict, shown in the report)
 - later: hosted web app — paste UI, history, team review queues
 
 ## License
