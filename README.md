@@ -8,20 +8,19 @@ Built on [Jev](https://docs.typesafe.ai) (TypeSafe System One) — typed judgmen
 sooth --source policy.md --text draft-reply.md
 ```
 
+Real output (planted errors in the draft vs a news source):
+
 ```
 # Sooth
 
-PASS 1 · FAIL 1 · REVIEW 1 · UNCHECKABLE 0** — threshold 0.70
+**PASS 2 · FAIL 3 · REVIEW 1 · UNCHECKABLE 1** — threshold 0.70
 
-| #   | Claim                                                | Verdict  | P             | Why (P distribution)                              |
-| --- | ---------------------------------------------------- | -------- | ------------- | ------------------------------------------------- |
-| 1   | Refunds are processed within three days of approval. | ✅ PASS   | ████████ 0.91 | supports 0.91 / contradicts 0.02 / not_found 0.07 |
-| 2   | We also support Bitcoin payments.                    | ❌ FAIL   | ███████░ 0.87 | supports 0.03 / contradicts 0.87 / not_found 0.10 |
-| 3   | Customers love the change.                           | ⚠️ REVIEW | ████░░░░ 0.54 | supports 0.20 / contradicts 0.05 / not_found 0.75 |
-
-## Needs review
-
-- line 5: Customers love the change.
+| # | Claim | Verdict | P | Why (P distribution) | Evidence |
+|---|-------|---------|---|----------------------|----------|
+| 3 | BNBR baru menuntaskan rights issue bernilai besar di harga Rp 33. | ❌ FAIL | ████████ 1.00 | contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 33 | `examples/news-1.md:25` "Saham ini juga baru menyelesaikan rights issue dalam juml…" |
+| 5 | BUMI hanya perlu turun sekitar 10% untuk menyentuh level Rp 50. | ❌ FAIL | ████████ 1.00 | contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 10 | `examples/news-1.md:23` "Adapun PT Bumi Resources Tbk (BUMI) di sekitar Rp192 haru…" |
+| 6 | BEI juga menetapkan batas atas harga saham Rp 5.000 per saham. | ⚠️ REVIEW | ████████ 1.00 | contradicts 0.00 / not_found 1.00 / supports 0.00 · details 0.02 · missing #s: 5.000 |  |
+| 7 | Para investor ritel sangat senang dengan aturan baru ini. | ➖ UNCHECKABLE | ██░░░░░░ 0.24 | P(checkable)=0.24 |  |
 ```
 
 ## Why
