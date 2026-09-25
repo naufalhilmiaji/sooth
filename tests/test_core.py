@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
 from sooth.claims import split_claims, split_segments
-from sooth.report import bar, exit_code, log_record, render_markdown
+from sooth.report import bar, exit_code, log_record, render_markdown, verdicts_from_record
 from sooth.verify import (
     FAIL,
     PASS,
@@ -227,6 +227,25 @@ def test_log_record_roundtrip_no_secret():
     parsed = json.loads(json.dumps(rec))
     assert parsed["model"] == "jev-1.13.0" and parsed["results"][0]["kind"] == PASS
     assert "api_key" not in json.dumps(parsed).lower()
+
+
+def test_verdicts_from_record_roundtrip():
+    """log_record → JSON → verdicts_from_record is lossless (demo replay path)."""
+    result = VerifyResult(
+        verdicts=[
+            v(PASS, confidence=0.9, probabilities={"supports": 0.9}, details_p=0.9,
+              evidence_id="s1", evidence_text="Source line.", evidence_line=3,
+              evidence_source="a.md"),
+            v(FAIL, claim_id="c2", confidence=1.0, probabilities={"contradicts": 1.0},
+              missing_numbers=("33",)),
+        ],
+        model="jev-1.13.0",
+        usage={"input_tokens": 10, "output_tokens": 1},
+    )
+    back = verdicts_from_record(json.loads(json.dumps(log_record(result, 0.7, ["a.md"], "d.md"))))
+    assert [(x.claim_id, x.kind, x.confidence) for x in back] == [("c1", PASS, 0.9), ("c2", FAIL, 1.0)]
+    assert back[0].evidence_text == "Source line." and back[0].evidence_line == 3
+    assert back[1].missing_numbers == ("33",) and back[1].evidence_text is None
 
 
 if __name__ == "__main__":

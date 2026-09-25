@@ -123,3 +123,27 @@ def log_record(result: VerifyResult, threshold: float, sources: list[str], draft
             for v in result.verdicts
         ],
     }
+
+
+def verdicts_from_record(record: dict) -> list[Verdict]:
+    """Inverse of log_record's `results` — replay a recorded run without the API."""
+    out = []
+    for r in record["results"]:
+        ev = r.get("evidence")
+        out.append(Verdict(
+            claim_id=r["id"],
+            claim_text=r["text"],
+            line=r["line"],
+            kind=r["kind"],
+            p_checkable=r.get("p_checkable"),
+            choice=r.get("choice"),
+            probabilities=r.get("probabilities") or {},
+            confidence=r.get("confidence"),
+            details_p=r.get("details_p"),
+            missing_numbers=tuple(r.get("missing_numbers") or ()),
+            evidence_id=ev.get("id") if ev else None,
+            evidence_text=ev.get("text") if ev else None,
+            evidence_line=ev.get("line") if ev else None,
+            evidence_source=ev.get("source") if ev else None,
+        ))
+    return out
