@@ -1,5 +1,11 @@
 # PRD — Sooth (v0.1)
 
+> **Status: this document describes the v0.1 scope, which shipped.** v0.2 added source-span
+> evidence; v0.2.2 added the offline `sooth demo`; v0.2.3 added the GitHub Action; v0.3.0 added
+> `--format json`, `sooth demo --case`, and Action `fail-on` + outputs. Shipped changes live in
+> [`CHANGELOG.md`](../CHANGELOG.md). Sections below are kept as written so the original scope
+> decisions stay auditable — where reality has moved past the v0.1 text, the note is inline.
+
 ## Problem
 
 AI writes text fast. Nobody checks it. Wrong claims ship. In 2026 most drafts (support replies, docs, reports, PR descriptions) are AI-written and reviewed by skimming humans.

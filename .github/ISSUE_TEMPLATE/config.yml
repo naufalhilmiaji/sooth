@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the PRD, design, and testing docs first
+    url: https://github.com/naufalhilmiaji/sooth/tree/main/docs
+    about: Scope decisions, the verdict contract, and what the test layers cover.
+  - name: TypeSafe / Jev API questions
+    url: https://docs.typesafe.ai
+    about: Sooth is a CLI on top of Jev. Questions about the engine, keys, or quotas belong with TypeSafe.

@@ -11,29 +11,47 @@ Companion to `PRD.md`. Stack and data flow only. No speculative layers.
 
 ```
 src/sooth/
-  __init__.py   # package API
-  claims.py     # split text → claims (pure)
-  verify.py     # build Jev questions, call API, map answers → verdicts (pure map + one I/O call)
-  report.py     # verdicts → markdown / plain text + JSONL log record (pure)
-  cli.py        # argparse, file I/O, exit codes, --log writer
+  __init__.py      # package API; __version__ read from distribution metadata
+  claims.py        # split text → claims (pure)
+  verify.py        # build Jev questions, call API, map answers → verdicts (pure map + one I/O call)
+  report.py        # verdicts → markdown / plain / json + JSONL log record (pure)
+  cli.py           # argparse, file I/O, exit codes, --log writer, demo replay
+  demo-en.json     # recorded run replayed by `sooth demo` (default case)
+  demo-id.json     # recorded run, Indonesian case (`sooth demo --case id`)
 tests/
   conftest.py
-  test_core.py  # asserts for pure functions + verdict mapping
-  smoke.sh      # optional live smoke (real key)
-examples/       # fixture: source.md, draft.md
-docs/           # PRD, DESIGN, TESTING
+  test_core.py     # pure functions, verdict mapping, JSON contract, CLI surface, packaging
+  test_action.sh   # GitHub Action arg wiring, outputs, fail-on policy (no network)
+  smoke.sh         # optional live smoke (real key)
+  calibrate.py     # live 30-claim calibration runner
+examples/          # fixtures + frozen calibration matrix
+docs/              # PRD, DESIGN, TESTING
 ```
+
+`demo-*.json` are non-Python files inside the package directory — they ship in the wheel
+because the wheel target packages the whole `src/sooth` tree. CI's `package` job installs
+the built wheel and replays both cases, so a packaging regression cannot hide.
 
 ## Flow
 
+Two entry points: a live verification run, and an offline demo replay of a recorded run.
+
 ```
-sources + draft
-   → claims.split(draft)            → list[Claim]
-   → verify.batch(claims, sources)  → list[Verdict]     # 1..n Jev calls
-   → report.render(verdicts)        → markdown string
-   → stdout / -o file
-   → optional JSONL log append
+live:  sources + draft
+         → claims.split(draft)            → list[Claim]
+         → verify.batch(claims, sources)  → list[Verdict]     # 1..n Jev calls
+         → report.render_{md,plain,json}  → report string
+         → stdout / -o file
+         → optional JSONL log append
+
+demo:  src/sooth/demo-<case>.json          # recorded log record, no network
+         → report.verdicts_from_record    → list[Verdict]
+         → the same renderers
 ```
+
+Both paths converge on the same `list[Verdict]` and the same renderers, so the demo
+exercises the real reporting code rather than a mock. The demo exit code comes from
+`exit_code(verdicts)` — the same function CI reads, which is why both demo cases exit `1`.
 
 Pure functions everywhere except `verify.call_jev()` and file I/O. Testable without network.
 
@@ -128,6 +146,30 @@ Evidence (v0.2, pre-parsed selection pattern): sources are split into sentence `
 ## Report (`report.py`)
 
 Markdown: summary line (`PASS n · FAIL n · REVIEW n · UNCHECKABLE n`), then one table as in PRD, ASCII probability bar in P column (`██████░░ 0.91` is enough; no unicode-only requirement). FAIL rows first? No — keep draft order, print summary counts first. `REVIEW` and `UNCHECKABLE` share a section below the table if any.
+
+Three renderers, selected by `--format`: `md` (default, for humans and the Action job summary),
+`plain` (for log lines and small terminals), `json` (for machines). `cli.RENDERERS` maps the
+flag value to the function, and all three take `(verdicts, threshold)`.
+
+JSON contract (`render_json`) — the surface consumers write code against:
+
+```jsonc
+{
+  "summary": { "pass": 4, "fail": 3, "review": 0, "uncheckable": 1, "threshold": 0.7 },
+  "exit_code": 1,                  // the code this process will return; stated, not implied
+  "verdicts": [ /* see verdict_to_dict below */ ]
+}
+```
+
+`verdict_to_dict(v)` is the single serialisation of a verdict, used by **both** `render_json`
+and the `--log` JSONL record. One function means the two JSON surfaces cannot drift apart;
+a test asserts `log_record(...)["results"] == render_json(...)["verdicts"]`. Keys:
+`id`, `text`, `line`, `kind`, `p_checkable`, `choice`, `probabilities`, `confidence`,
+`details_p`, `missing_numbers`, `evidence` (`{id, text, line, source}` or `null`).
+
+The raw exit code is always available three ways — process status, the top-level `exit_code`
+in the JSON report, and the Action's `exit-code` output — so a caller never has to infer it
+from counts.
 
 ## Decision log (`--log`)
 
