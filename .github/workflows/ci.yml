@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,3 +20,41 @@ jobs:
       - run: ruff check src tests
       - run: pytest
       - run: bash tests/test_action.sh
+
+      # End-to-end smoke of the packaged CLI with no API key: both demo cases are
+      # recorded runs, so this exercises claim parsing, verdict mapping, and every
+      # renderer on a real report. It also pins the exit-code contract, which is
+      # the thing CI users actually depend on.
+      - name: Offline demo smoke
+        run: |
+          sooth --version
+          set +e
+          sooth demo > /dev/null;                    rc_md=$?
+          sooth demo --case id > /dev/null;           rc_id=$?
+          sooth demo --format plain > /dev/null;      rc_plain=$?
+          sooth demo --format json > /tmp/demo.json;  rc_json=$?
+          set -e
+          test "$rc_md" -eq 1 && test "$rc_id" -eq 1 && test "$rc_plain" -eq 1 && test "$rc_json" -eq 1
+          python -c "import json; d = json.load(open('/tmp/demo.json')); assert d['exit_code'] == 1, d['summary']; assert len(d['verdicts']) == 8, len(d['verdicts']); assert sum(d['summary'][k] for k in ('pass','fail','review','uncheckable')) == 8; assert d['verdicts'][1]['missing_numbers'] == ['2,000'], d['verdicts'][1]; print('json contract ok')"
+
+  package:
+    # The demo records are non-Python files inside the package directory. If they
+    # stop shipping in the wheel, `sooth demo` breaks only for users who installed
+    # from PyPI — so assert it here rather than by hand.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip wheel --no-deps -w dist .
+      - name: Install the built wheel and replay every demo case
+        run: |
+          pip install --force-reinstall dist/*.whl
+          cd /tmp   # leave the source tree, so the installed copy is what runs
+          set +e
+          sooth demo > /dev/null;              rc_en=$?
+          sooth demo --case id > /dev/null;    rc_id=$?
+          set -e
+          test "$rc_en" -eq 1 && test "$rc_id" -eq 1
+          echo "wheel ships both demo cases"

@@ -1,0 +1,3 @@
+# Summary: Kestrel Cloud ships API v3
+
+Kestrel Cloud launched API v3 on 14 August 2026 across all of its regions. The rate limit jumps to 2,000 requests per second per project, a twenty-fold increase over v2. Token pricing falls to $0.002 per 1,000 input tokens, making it the cheapest mainstream inference API. Kestrel is now certified SOC 2 Type II, which unblocks enterprise procurement. The free tier now includes 10,000 requests per month. API v3 runs across 12 regions and held p99 latency of 180 ms through the beta. Developers say the migration is the smoothest they have seen. Existing v2 keys keep working until 31 January 2027.

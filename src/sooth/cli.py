@@ -8,11 +8,26 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sooth import __version__
 from sooth.claims import split_claims
-from sooth.report import exit_code, log_record, render_markdown, render_plain, verdicts_from_record
+from sooth.report import (
+    exit_code,
+    log_record,
+    render_json,
+    render_markdown,
+    render_plain,
+    verdicts_from_record,
+)
 from sooth.verify import DEFAULT_THRESHOLD, VerifyError, verify_claims
 
-DEMO_RECORD = Path(__file__).with_name("demo.json")
+# Bundled recorded runs for `sooth demo` — no API key needed. Keys are --case values.
+DEMO_CASES = {
+    "en": ("demo-en.json", "release notes vs an AI summary — three numbers quietly wrong"),
+    "id": ("demo-id.json", "Indonesian market news vs an AI summary"),
+}
+DEFAULT_CASE = "en"
+
+RENDERERS = {"md": render_markdown, "plain": render_plain, "json": render_json}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -22,38 +37,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                     "Each claim gets PASS / FAIL / REVIEW with calibrated probabilities.",
     )
     p.add_argument("command", nargs="?", choices=["demo"],
-                   help="run the offline demo against a bundled recorded run (no API key)")
+                   help="replay a bundled recorded run (no API key needed)")
+    p.add_argument("--case", choices=sorted(DEMO_CASES), default=DEFAULT_CASE,
+                   help="which demo fixture to replay: "
+                        + ", ".join(f"{k} ({v[1]})" for k, v in sorted(DEMO_CASES.items())))
+    p.add_argument("--version", action="version", version=f"sooth {__version__}")
     p.add_argument("--source", action="append", metavar="FILE",
                    help="ground-truth source file (repeatable)")
     p.add_argument("--text", metavar="FILE", help="AI-generated draft to check")
     p.add_argument("--confidence", type=float, default=DEFAULT_THRESHOLD, metavar="T",
                    help=f"REVIEW below this confidence (default {DEFAULT_THRESHOLD})")
-    p.add_argument("--format", choices=["md", "plain"], default="md", help="report format")
+    p.add_argument("--format", choices=sorted(RENDERERS), default="md",
+                   help="report format: md (default), plain for logs, json for machines")
     p.add_argument("-o", "--output", metavar="FILE", help="write report to file instead of stdout")
     p.add_argument("--log", metavar="FILE", help="append full judgment trace as one JSONL line")
     return p.parse_args(argv)
 
 
-def run_demo(fmt: str) -> int:
+def run_demo(case: str, fmt: str) -> int:
     """Replay a bundled judgment trace through the real report code. No network."""
-    record = json.loads(DEMO_RECORD.read_text(encoding="utf-8"))
+    filename, blurb = DEMO_CASES[case]
+    record = json.loads(Path(__file__).with_name(filename).read_text(encoding="utf-8"))
     print(
-        "demo: replaying a recorded run "
-        f"({record['draft']} vs {', '.join(record['sources'])}) — no API key needed",
+        f"demo[{case}]: replaying a recorded run — {blurb}\n"
+        f"  {record['draft']} vs {', '.join(record['sources'])} (model {record['model']})",
         file=sys.stderr,
     )
     verdicts = verdicts_from_record(record)
-    report = (render_markdown if fmt == "md" else render_plain)(
-        verdicts, threshold=record["threshold"]
-    )
-    print(report, end="")
+    print(RENDERERS[fmt](verdicts, threshold=record["threshold"]), end="")
     return exit_code(verdicts)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.command == "demo":
-        return run_demo(args.format)
+        return run_demo(args.case, args.format)
     if not args.source or not args.text:
         print("error: --source and --text are required (or try: sooth demo)", file=sys.stderr)
         return 3
@@ -81,9 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 3
 
-    report = (render_markdown if args.format == "md" else render_plain)(
-        result.verdicts, threshold=args.confidence
-    )
+    report = RENDERERS[args.format](result.verdicts, threshold=args.confidence)
     if args.output:
         Path(args.output).write_text(report, encoding="utf-8")
     else:

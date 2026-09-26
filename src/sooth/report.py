@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from sooth.verify import FAIL, PASS, REVIEW, UNCHECKABLE, Verdict, VerifyResult
 
 _BAR_WIDTH = 8
@@ -89,6 +91,49 @@ def exit_code(verdicts: list[Verdict]) -> int:
     return 0
 
 
+def verdict_to_dict(v: Verdict) -> dict:
+    """One verdict as a JSON-ready object. Shared by the JSON report and the `--log` record."""
+    return {
+        "id": v.claim_id,
+        "text": v.claim_text,
+        "line": v.line,
+        "kind": v.kind,
+        "p_checkable": v.p_checkable,
+        "choice": v.choice,
+        "probabilities": dict(v.probabilities),
+        "confidence": v.confidence,
+        "details_p": v.details_p,
+        "missing_numbers": list(v.missing_numbers),
+        "evidence": (
+            {
+                "id": v.evidence_id,
+                "text": v.evidence_text,
+                "line": v.evidence_line,
+                "source": v.evidence_source,
+            }
+            if v.evidence_text
+            else None
+        ),
+    }
+
+
+def render_json(verdicts: list[Verdict], threshold: float) -> str:
+    """Machine-readable report: summary counts, per-claim verdicts, and the exit code to expect."""
+    t = counts(verdicts)
+    payload = {
+        "summary": {
+            "pass": t[PASS],
+            "fail": t[FAIL],
+            "review": t[REVIEW],
+            "uncheckable": t[UNCHECKABLE],
+            "threshold": threshold,
+        },
+        "exit_code": exit_code(verdicts),
+        "verdicts": [verdict_to_dict(v) for v in verdicts],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
 def log_record(result: VerifyResult, threshold: float, sources: list[str], draft: str) -> dict:
     """One JSONL line per run. Full probability distributions — the decision-ledger seed."""
     return {
@@ -97,31 +142,7 @@ def log_record(result: VerifyResult, threshold: float, sources: list[str], draft
         "sources": sources,
         "draft": draft,
         "usage": dict(result.usage),
-        "results": [
-            {
-                "id": v.claim_id,
-                "text": v.claim_text,
-                "line": v.line,
-                "kind": v.kind,
-                "p_checkable": v.p_checkable,
-                "choice": v.choice,
-                "probabilities": dict(v.probabilities),
-                "confidence": v.confidence,
-                "details_p": v.details_p,
-                "missing_numbers": list(v.missing_numbers),
-                "evidence": (
-                    {
-                        "id": v.evidence_id,
-                        "text": v.evidence_text,
-                        "line": v.evidence_line,
-                        "source": v.evidence_source,
-                    }
-                    if v.evidence_text
-                    else None
-                ),
-            }
-            for v in result.verdicts
-        ],
+        "results": [verdict_to_dict(v) for v in result.verdicts],
     }
 
 

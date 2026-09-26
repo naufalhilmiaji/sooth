@@ -8,7 +8,25 @@ Frozen results of `examples/calibration.json` run through `tests/calibrate.py`.
 - **Score:** 30/30 first run; 29/30 after v0.2 evidence feature (bar: ≥ 24/30, zero confident-wrong `PASS` on contradicted claims — met both runs)
 - **Runner:** `PYTHONPATH=src python3 tests/calibrate.py`
 
-## Matrix (rows = expected, cols = got) — latest run
+## 2026-09-26 re-run (v0.3.0 code)
+
+- **Score:** 30/30, threshold 0.7, runner exit 0.
+- **Confident-wrong `PASS` on contradicted: 0.**
+- The one historically jittery case — the invented "batas atas Rp 5.000" claim — landed `REVIEW` this run, matching its label. Its checkable probability still sits on the 0.5 floor; see the variance note below.
+
+```
+exp\got           PASS      FAIL    REVIEWUNCHECKABLE
+PASS                10         0         0         0
+FAIL                 0        10         0         0
+REVIEW               0         0         6         0
+UNCHECKABLE          0         0         0         4
+```
+
+No verification logic or threshold changed between this run and the previous one; only the
+reporting layer did (`--format json`, demo cases, Action outputs). The re-run is here to show
+that the numbers in the README are current, not inherited.
+
+## Matrix (rows = expected, cols = got) — 2026-09-25 run
 
 | exp\got | PASS | FAIL | REVIEW | UNCHECKABLE |
 |---------|------|------|--------|-------------|

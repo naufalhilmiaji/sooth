@@ -7,12 +7,22 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-run without install
 
+import sooth
+import sooth.cli
 from sooth.claims import split_claims, split_segments
-from sooth.report import bar, exit_code, log_record, render_markdown, verdicts_from_record
+from sooth.report import (
+    bar,
+    exit_code,
+    log_record,
+    render_json,
+    render_markdown,
+    verdicts_from_record,
+)
 from sooth.verify import (
     FAIL,
     PASS,
@@ -246,6 +256,123 @@ def test_verdicts_from_record_roundtrip():
     assert [(x.claim_id, x.kind, x.confidence) for x in back] == [("c1", PASS, 0.9), ("c2", FAIL, 1.0)]
     assert back[0].evidence_text == "Source line." and back[0].evidence_line == 3
     assert back[1].missing_numbers == ("33",) and back[1].evidence_text is None
+
+
+# --- report.render_json ---
+
+
+def test_render_json_shape_and_agreement_with_exit_code():
+    verdicts = [
+        v(PASS, confidence=0.98, probabilities={"supports": 0.98}, details_p=0.9),
+        v(FAIL, claim_id="c2", confidence=1.0, probabilities={"contradicts": 1.0},
+          missing_numbers=("2,000",), evidence_id="s1", evidence_text="limit is 500 req/s.",
+          evidence_line=11, evidence_source="notes.md"),
+        v(UNCHECKABLE, claim_id="c3", p_checkable=0.16),
+    ]
+    payload = json.loads(render_json(verdicts, 0.7))
+    assert payload["summary"] == {
+        "pass": 1, "fail": 1, "review": 0, "uncheckable": 1, "threshold": 0.7,
+    }
+    assert payload["exit_code"] == exit_code(verdicts) == 1
+    assert [d["kind"] for d in payload["verdicts"]] == [PASS, FAIL, UNCHECKABLE]
+    assert payload["verdicts"][1]["missing_numbers"] == ["2,000"]
+    assert payload["verdicts"][1]["evidence"]["line"] == 11
+    assert payload["verdicts"][2]["evidence"] is None
+    assert "api_key" not in json.dumps(payload).lower()
+
+
+def test_render_json_agrees_with_log_record_verdicts():
+    """The two JSON surfaces must not drift apart."""
+    result = VerifyResult(verdicts=[v(PASS, confidence=0.9)], model="m", usage={})
+    rec = log_record(result, 0.7, ["a.md"], "d.md")
+    payload = json.loads(render_json(result.verdicts, 0.7))
+    assert rec["results"] == payload["verdicts"]
+
+
+# --- packaging / CLI surface ---
+
+
+def test_version_comes_from_packaging_metadata():
+    """Guard the drift bug: __version__ must never be a stale hardcoded literal."""
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    assert sooth.__version__ in (declared, "0.0.0+unknown"), (
+        f"__version__ is {sooth.__version__!r} but pyproject declares {declared!r}"
+    )
+    assert declared.count(".") == 2 and all(part.isdigit() for part in declared.split("."))
+
+
+def test_demo_fixtures_are_valid_records():
+    """Every bundled --case must replay: valid JSON, real fields, unambiguous verdicts."""
+    for case, (filename, _blurb) in sooth.cli.DEMO_CASES.items():
+        path = Path(__file__).resolve().parents[1] / "src" / "sooth" / filename
+        assert path.is_file(), f"demo case {case!r} points at missing {filename}"
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert record["results"], f"{case}: empty results"
+        assert 0.0 < record["threshold"] < 1.0
+        assert record["model"].startswith("jev-")
+        for r in record["results"]:
+            assert r["kind"] in {PASS, FAIL, REVIEW, UNCHECKABLE}
+            assert r["text"].strip()
+        verdicts = verdicts_from_record(record)
+        assert len(verdicts) == len(record["results"])
+
+
+def test_cli_demo_replays_offline():
+    """`sooth demo` on every case: no network, report on stdout, exit code from the record."""
+    import io
+    from contextlib import redirect_stderr, redirect_stdout
+
+    for case in sooth.cli.DEMO_CASES:
+        buf, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(err):
+            code = sooth.cli.main(["demo", "--case", case])
+        out = buf.getvalue()
+        assert "PASS" in out and "| # | Claim | Verdict |" in out
+        assert code in (0, 1, 2), f"{case}: unexpected exit {code}"
+        assert "error" not in err.getvalue().lower()
+
+
+def test_cli_demo_json_is_machine_readable():
+    import io
+    from contextlib import redirect_stderr, redirect_stdout
+
+    buf = io.StringIO()
+    with redirect_stdout(buf), redirect_stderr(io.StringIO()):
+        code = sooth.cli.main(["demo", "--format", "json"])
+    payload = json.loads(buf.getvalue())
+    assert payload["exit_code"] == code
+    assert sum(payload["summary"][k] for k in ("pass", "fail", "review", "uncheckable")) \
+        == len(payload["verdicts"])
+
+
+def test_cli_usage_errors_exit_3():
+    import io
+    from contextlib import redirect_stderr, redirect_stdout
+
+    for argv in ([], ["--source", "a.md"], ["--text", "b.md"]):
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            assert sooth.cli.main(argv) == 3
+
+
+def test_cli_version_flag():
+    import io
+    from contextlib import redirect_stdout
+
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            sooth.cli.parse_args(["--version"])
+    except SystemExit as e:
+        assert e.code == 0
+    else:  # pragma: no cover - argparse always exits on --version
+        raise AssertionError("--version did not exit")
+    assert buf.getvalue().strip() == f"sooth {sooth.__version__}"
+
+
+def test_cli_format_choices_are_wired():
+    assert set(sooth.cli.RENDERERS) == {"md", "plain", "json"}
+    assert sooth.cli.DEFAULT_CASE in sooth.cli.DEMO_CASES
 
 
 if __name__ == "__main__":
