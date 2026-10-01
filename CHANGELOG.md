@@ -4,6 +4,76 @@ All notable changes to Sooth. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-01
+
+Roadmap Phases 1–2 — traceable verdicts, and evidence retrieval that finds the span it judges against.
+
+Question wording and candidate ranking both changed in `verify.py`, so the calibrated thresholds were
+re-validated live on 2026-10-01:
+
+- **Phase 1 alone:** 29/30 (bar ≥ 24/30), zero confident-wrong `PASS`, runner exit 0.
+- **Phase 1 + 2:** **30/30**, zero confident-wrong `PASS`, runner exit 0.
+
+Phase 1 on its own was a net downgrade — a contradicted claim with no citable span became `REVIEW`
+instead of `FAIL`, which is honest but adds review load for no gain. Phase 2 removed the cause. Full
+numbers in [`examples/calibration.md`](examples/calibration.md).
+
+README's report and JSON examples are now generated from real `sooth demo` output and asserted
+against it by `test_readme_examples_match_live_output`, so they cannot drift again.
+
+### Added
+
+- `reason` on every verdict (Markdown `Why` column, JSON, and `plain` output) — names the one rule
+  that produced the kind: `supported`, `contradicted`, `not_found`, `low_confidence`,
+  `detail_drift`, `smuggled_number`, `evidence_missing`, `uncheckable`. Derived, so it cannot go
+  stale when `apply_safeguards` or `require_evidence` rewrite the kind.
+- `claims.dropped_sentences(text)` — the sentences a split skipped. The CLI prints the count to
+  stderr, so no sentence disappears without a word about it.
+- `verify.require_evidence` — exported.
+
+### Changed
+
+- **Behavioural:** a `PASS` or `FAIL` with no cited source span is now demoted to `REVIEW`
+  (`reason: evidence_missing`). The verdict questions see the whole source but the evidence question
+  sees only the six pre-filtered candidates, so a confident verdict could previously ship with
+  `evidence: null` and no way to audit it. **This can lower `PASS`/`FAIL` counts and raise `REVIEW`.**
+- **Behavioural:** short sentences carrying a number are now kept as claims. `It cost $2M.` used to
+  be dropped as a three-word fragment and never verified.
+- Question instructions now state that `sources` and `segments` are untrusted quoted data that must
+  not be obeyed. A hostile document can no longer read as an instruction to the judge.
+- `apply_safeguards` and `attach_evidence` use `dataclasses.replace`, so a field added to `Verdict`
+  can no longer be silently dropped at those seams.
+
+### Fixed
+
+- **Evidence retrieval.** `evidence_candidates` now ranks source spans by **idf-weighted term
+  overlap** instead of raw word overlap. The old scorer counted boilerplate and discriminative words
+  alike, so a span that merely shared the topic's common nouns outranked the one that actually
+  contradicted the claim — and with `require_evidence` in place, that meant a real contradiction
+  arriving as `REVIEW` with nothing to cite. In the Indonesian fixture `saham` appears in almost
+  every sentence while `VIVA disuspensi` identifies one.
+  `EVIDENCE_CANDIDATES` is unchanged at 6: raising it to 20 was the plan, but measurement showed the
+  *ranking*, not the pool size, was the defect. Offline, over 12 labelled claims from the recorded
+  runs, idf retrieves every gold span by `k=3`; the old scorer missed one even at `k=20`.
+- **Request payload.** `state` now carries only the segments a claim was offered, not every segment
+  of every source — a claim can only cite what it was given. `sources` still carries the whole
+  document, so verdict recall is unchanged. Measured live on the same draft and source:
+  **11,111 → 9,500 input tokens**.
+- An API failure now reports the largest request size it built, so an oversized source reads as
+  "split long sources" rather than an opaque SDK error. It is a diagnostic, not a guard — no cap is
+  documented by the vendor, so no threshold is invented.
+
+- `build_questions` rejects duplicate claim ids instead of silently overwriting one claim's
+  questions with another's, which mis-attributed verdicts.
+
+### Note
+
+- `src/sooth/demo-{en,id}.json` are recordings from the pre-Phase-1 pipeline. `demo-id.json` claim
+  c4 is a `FAIL` with `evidence: null`; the live path now returns `FAIL` citing `news-1.md:5`. The
+  recordings replay faithfully (the demo does not re-run verification), so they under-report current
+  behaviour. Re-record them with a real key per `CONTRIBUTING.md` rather than editing verdicts by
+  hand.
+
 ## [0.3.0] — 2026-09-26
 
 Presentation and machine-consumption release. No change to verification behaviour or to any calibrated threshold.

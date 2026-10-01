@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-r
 
 import sooth
 import sooth.cli
-from sooth.claims import split_claims, split_segments
+from sooth.claims import Claim, dropped_sentences, split_claims, split_segments
 from sooth.report import (
     bar,
     exit_code,
@@ -29,6 +29,7 @@ from sooth.verify import (
     REVIEW,
     UNCHECKABLE,
     Verdict,
+    VerifyError,
     VerifyResult,
     apply_safeguards,
     attach_evidence,
@@ -37,6 +38,7 @@ from sooth.verify import (
     evidence_candidates,
     map_verdict,
     missing_numbers,
+    require_evidence,
 )
 
 
@@ -91,6 +93,32 @@ def test_split_bold_handling():
     ]
 
 
+def test_split_keeps_short_sentences_that_carry_a_number():
+    """A 3-word sentence with a figure is a checkable claim; it must not vanish."""
+    claims = split_claims("It cost $2M. The team shipped the whole release on time.")
+    assert [c.text for c in claims] == [
+        "It cost $2M.",
+        "The team shipped the whole release on time.",
+    ]
+
+
+def test_abbreviation_does_not_swallow_the_next_sentence():
+    """Reproduces the `Dr.` mis-split: the numbered follow-up used to disappear."""
+    claims = split_claims("Dr. Smith said the migration finished. It cost $2M.")
+    assert "It cost $2M." in [c.text for c in claims]
+
+
+def test_dropped_sentences_are_reported_not_silent():
+    text = "Do you like it?\nYes\nWe support card and bank payments only.\n"
+    assert [c.text for c in split_claims(text)] == ["We support card and bank payments only."]
+    drops = dropped_sentences(text)
+    assert "Do you like it?" in drops and "Yes" in drops
+
+
+def test_no_drops_reported_on_a_clean_draft():
+    assert dropped_sentences("We support card and bank payments only.") == []
+
+
 # --- verify.map_verdict ---
 
 
@@ -123,10 +151,47 @@ def test_verdict_threshold_boundary_inclusive():
     assert map_verdict(c, 1.0, "supports", {}, 0.7, 0.7).kind == PASS
 
 
+def test_reason_names_the_rule_that_fired():
+    """`reason` is the machine-readable why — one name per demotion path."""
+    c = split_claims("Vague praise for the team.")[0]
+    seg = split_segments("Team delivered the project on time.", "a.md")[0]
+
+    def sourced(v: Verdict) -> Verdict:
+        return attach_evidence(v, {seg.id: seg}, seg.id)
+
+    assert map_verdict(c, 1.0, "supports", {}, 0.9, 0.7).reason == "supported"
+    assert map_verdict(c, 0.2, "not_found", {}, 0.9, 0.7).reason == "uncheckable"
+    assert map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7).reason == "contradicted"
+    assert map_verdict(c, 1.0, "not_found", {}, 0.9, 0.7).reason == "not_found"
+    assert sourced(map_verdict(c, 1.0, "supports", {}, 0.55, 0.7)).reason == "low_confidence"
+
+    gate = apply_safeguards(map_verdict(c, 1.0, "supports", {}, 0.9, 0.7), 0.3, [])
+    assert sourced(gate).reason == "detail_drift"
+
+    smuggled = apply_safeguards(map_verdict(c, 1.0, "supports", {}, 0.9, 0.7), 0.9, ["110"])
+    assert sourced(smuggled).reason == "smuggled_number"
+
+    unsourced = require_evidence(map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7))
+    assert unsourced.kind == REVIEW and unsourced.reason == "evidence_missing"
+
+
+def test_require_evidence_demotes_unsourced_verdicts():
+    """A PASS/FAIL with no cited span is not auditable — it becomes REVIEW."""
+    c = split_claims("Vague praise for the team.")[0]
+    seg = split_segments("Team delivered the project on time.", "a.md")[0]
+    unsourced = map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7)
+
+    assert require_evidence(unsourced).kind == REVIEW
+    assert require_evidence(attach_evidence(unsourced, {}, "none")).kind == REVIEW
+    assert require_evidence(attach_evidence(unsourced, {seg.id: seg}, seg.id)).kind == FAIL
+    # REVIEW is never touched by the evidence rule
+    assert require_evidence(map_verdict(c, 1.0, "not_found", {}, 0.9, 0.7)).kind == REVIEW
+
+
 # --- verify builders ---
 
 
-def test_builders_two_questions_per_claim():
+def test_builders_four_questions_per_claim():
     claims = split_claims("A concrete claim about billing.\nAnother concrete claim about refunds.")
     segs = split_segments("Refunds take three days.", "a.md")
     cands = {c.id: segs for c in claims}
@@ -147,6 +212,27 @@ def test_builders_two_questions_per_claim():
     assert state["sources"][0] == {"name": "a.md", "text": "text"}
     assert state["claims"][0]["text"] == claims[0].text
     assert state["segments"][0]["id"] == segs[0].id
+
+
+def test_every_question_frames_the_source_as_untrusted():
+    """A document can contain text aimed at the judge; no question may omit the clause."""
+    claims = split_claims("A concrete claim about billing refunds.")
+    for name, question in build_questions(claims, {}).items():
+        assert "untrusted" in question["instructions"], f"{name} lost the data/instruction split"
+
+
+def test_build_questions_rejects_duplicate_ids():
+    """Ids are dict keys — a collision silently overwrites a question and mis-attributes it."""
+    claims = [
+        Claim(id="c1", text="First claim about billing refunds.", line=1),
+        Claim(id="c1", text="Second claim about shipping delays.", line=2),
+    ]
+    try:
+        build_questions(claims, {})
+    except VerifyError as e:
+        assert "duplicate claim ids" in str(e)
+    else:
+        raise AssertionError("duplicate ids accepted — questions would be overwritten")
 
 
 def test_split_segments_ids_and_sources():
@@ -173,6 +259,43 @@ def test_evidence_candidates_word_overlap():
     ]
     top = evidence_candidates("Refund requests within thirty days qualify for money back.", segs)
     assert top[0].id == "s2"
+
+
+def _evidence_labels() -> list[tuple[str, str, int]]:
+    """(claim, source path, gold line) drawn from the recorded runs, plus the known miss.
+
+    The recorded labels are the spans a real run actually cited, so the set is biased
+    toward retrieval that already worked — it is a regression guard, not a benchmark.
+    """
+    root = Path(__file__).resolve().parents[1]
+    labels: list[tuple[str, str, int]] = []
+    for name in ("demo-en.json", "demo-id.json"):
+        record = json.loads((root / "src" / "sooth" / name).read_text(encoding="utf-8"))
+        source = record["sources"][0]
+        labels += [(r["text"], source, r["evidence"]["line"])
+                   for r in record["results"] if r.get("evidence")]
+    # demo-id c4: the run answered `contradicts 1.00` and cited nothing. The sentence
+    # that contradicts the claim is news-1.md line 5 — this is the case the idf ranking
+    # exists to fix, and plain set-overlap does not find it below k≈40.
+    labels.append(("Saham VIVA disuspensi di harga Rp 50.", "examples/news-1.md", 5))
+    return labels
+
+
+def test_evidence_recall_on_recorded_runs():
+    """Every labelled claim retrieves a span from the source line it should cite."""
+    root = Path(__file__).resolve().parents[1]
+    labels = _evidence_labels()
+    assert len(labels) >= 12, f"label set shrank to {len(labels)} — did a record change?"
+    cache: dict[str, str] = {}
+    misses = []
+    for claim, source, gold_line in labels:
+        if source not in cache:
+            cache[source] = (root / source).read_text(encoding="utf-8")
+        segs = split_segments(cache[source], source)
+        got = evidence_candidates(claim, segs)
+        if not any(s.line == gold_line for s in got):
+            misses.append((claim[:50], gold_line, [s.line for s in got]))
+    assert not misses, f"evidence not retrieved for: {misses}"
 
 
 def test_attach_evidence():
@@ -289,6 +412,12 @@ def test_render_json_agrees_with_log_record_verdicts():
     assert rec["results"] == payload["verdicts"]
 
 
+def test_verdict_dict_carries_reason():
+    """Every serialised verdict names the rule that produced it."""
+    payload = json.loads(render_json([v(FAIL, confidence=1.0)], 0.7))
+    assert payload["verdicts"][0]["reason"] == "contradicted"
+
+
 # --- packaging / CLI surface ---
 
 
@@ -344,6 +473,41 @@ def test_cli_demo_json_is_machine_readable():
     assert payload["exit_code"] == code
     assert sum(payload["summary"][k] for k in ("pass", "fail", "review", "uncheckable")) \
         == len(payload["verdicts"])
+
+
+def test_readme_examples_match_live_output():
+    """README shows real output. If a renderer changes, regenerate the README.
+
+    The hero block went stale by hand once — it was still missing the `reason` column and
+    the JSON example had dropped `evidence.id` — so this pins both to the CLI.
+    """
+    import io
+    import re
+    from contextlib import redirect_stderr, redirect_stdout
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+
+    def demo(*argv: str) -> str:
+        buf = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(io.StringIO()):
+            code = sooth.cli.main(["demo", *argv])
+        assert code == 1, f"demo no longer exits 1, but the README claims it does ({argv})"
+        return buf.getvalue()
+
+    report = re.search(r"```\n(# Sooth\n.*?)```", readme, re.DOTALL)
+    assert report, "README no longer contains a fenced `sooth demo` report"
+    assert report.group(1).rstrip() == demo().rstrip(), (
+        "README's report block is stale — paste the current `sooth demo` output"
+    )
+
+    contract = re.search(r"```json\n(.*?)```", readme, re.DOTALL)
+    assert contract, "README no longer contains a JSON contract example"
+    shown = json.loads(contract.group(1))
+    live = json.loads(demo("--format", "json"))
+    live["verdicts"] = [v for v in live["verdicts"] if v["id"] == shown["verdicts"][0]["id"]]
+    assert shown == live, (
+        "README's JSON example is stale — regenerate it from `sooth demo --format json`"
+    )
 
 
 def test_cli_usage_errors_exit_3():

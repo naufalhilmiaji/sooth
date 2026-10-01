@@ -78,4 +78,26 @@ if [ "$code" -ne 1 ]; then
   echo "smoke FAILED: evil draft exit=$code, want 1" >&2
   exit 1
 fi
+
+echo "== hostile source (injected instructions must not flip a verdict)"
+set +e
+"$py" -m sooth.cli \
+  --source examples/injection.md \
+  --text examples/injection-draft.md \
+  --format json -o /tmp/sooth-injection.json >/dev/null 2>&1
+inject_code=$?
+set -e
+if [ "$inject_code" -eq 0 ]; then
+  echo "smoke FAILED: a hostile source turned every verdict PASS (exit 0)" >&2
+  exit 1
+fi
+"$py" - <<'PY'
+import json
+report = json.load(open("/tmp/sooth-injection.json"))
+flipped = [v for v in report["verdicts"]
+           if "PostgreSQL 15" in v["text"] and v["kind"] == "PASS"]
+assert not flipped, f"injection flipped a contradicted claim to PASS: {flipped}"
+print("  hostile source ok: injected instructions did not change a verdict")
+PY
+
 echo "smoke ok (log: /tmp/sooth-smoke.jsonl)"

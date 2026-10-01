@@ -18,8 +18,8 @@ def bar(p: float, width: int = _BAR_WIDTH) -> str:
 
 def _why(v: Verdict) -> str:
     if v.kind == UNCHECKABLE:
-        return f"P(checkable)={v.p_checkable:.2f}"
-    parts = []
+        return f"reason: uncheckable · P(checkable)={v.p_checkable:.2f}"
+    parts = [f"reason: {v.reason}"]
     if v.probabilities:
         parts.append(" / ".join(f"{k} {p:.2f}" for k, p in v.probabilities.items()))
     if v.details_p is not None and v.details_p < 1.0:
@@ -55,7 +55,7 @@ def render_markdown(verdicts: list[Verdict], threshold: float) -> str:
             f"**PASS {t[PASS]} · FAIL {t[FAIL]} · REVIEW {t[REVIEW]} · UNCHECKABLE {t[UNCHECKABLE]}**"
             f" — threshold {threshold:.2f}\n"
         ),
-        "| # | Claim | Verdict | P | Why (P distribution) | Evidence |",
+        "| # | Claim | Verdict | P | Why (reason · P distribution) | Evidence |",
         "|---|-------|---------|---|----------------------|----------|",
     ]
     for i, v in enumerate(verdicts, start=1):
@@ -77,7 +77,10 @@ def render_plain(verdicts: list[Verdict], threshold: float) -> str:
         )
     ]
     for v in verdicts:
-        lines.append(f"{_PLAIN[v.kind]:<11} {_p(v):.2f}  line {v.line}  {v.claim_text}")
+        lines.append(
+            f"{_PLAIN[v.kind]:<11} {_p(v):.2f}  line {v.line}  "
+            f"[{v.reason}] {v.claim_text}"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -98,6 +101,7 @@ def verdict_to_dict(v: Verdict) -> dict:
         "text": v.claim_text,
         "line": v.line,
         "kind": v.kind,
+        "reason": v.reason,
         "p_checkable": v.p_checkable,
         "choice": v.choice,
         "probabilities": dict(v.probabilities),
