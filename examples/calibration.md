@@ -44,9 +44,8 @@ The judgment itself is unchanged — still `contradicts 1.00`, the judge is as c
 changed is that Phase 1 refuses to call a verdict `FAIL` when it cannot cite the span it judged
 against. The true contradicting sentence ("PT Visi Media Asia Tbk (VIVA) disuspensi di harga
 Rp 38, …") is **not among the six word-overlap candidates** offered to the evidence question, so the
-model answers `none` and the verdict is demoted. That is Critical #1 in [`docs/AUDIT.md`](../docs/AUDIT.md),
-and it is the reason the candidate pool widens in Phase 2 — after which this case should return to
-`FAIL` **with** the spanning sentence attached.
+model answers `none` and the verdict is demoted. That is the defect Phase 2 addresses, and it is the
+reason this case should return to `FAIL` **with** the spanning sentence attached.
 
 The label was not changed and the threshold was not moved. The case is a real `FAIL`; the tool is
 being conservatively honest about not yet being able to prove it.
