@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import re
 from dataclasses import dataclass, field, replace
@@ -21,6 +23,8 @@ UNCHECKABLE = "UNCHECKABLE"
 
 DETAIL_FLOOR = 0.5  # PASS needs both supports-confidence and this detail-match probability
 EVIDENCE_CANDIDATES = 6  # code-prefiltered spans offered per claim (pre-parsed cookbook)
+NUMBER_BONUS = 2.0  # flat idf-equivalent added when a span shares a number with the claim
+_WORD = re.compile(r"[A-Za-zÀ-ÿ]{4,}")
 
 # Source text is untrusted input: a document can contain text addressed to the judge.
 # Every question carries this clause so source content is read as evidence, never obeyed.
@@ -52,16 +56,41 @@ def missing_numbers(claim_text: str, source_texts: list[str]) -> list[str]:
     return missing
 
 
+def _terms(text: str) -> set[str]:
+    """Lowercased word terms, 4+ letters — the unit of both matching and idf."""
+    return {w.lower() for w in _WORD.findall(text)}
+
+
 def evidence_candidates(claim_text: str, segments: list[Segment],
                         top: int = EVIDENCE_CANDIDATES) -> list[Segment]:
-    """Rank source segments by word overlap, numbers weighted. Pure pre-filter."""
-    nums = extract_numbers(claim_text)
-    words = {w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{4,}", claim_text)}
-    scored = []
+    """Rank source segments for a claim by idf-weighted term overlap. Pure pre-filter.
+
+    Plain set-overlap (the v0.2 scorer) counted boilerplate and discriminative words
+    alike, so the span that merely *shares the topic's common nouns* outranked the one
+    that actually contradicts the claim: `saham` appears in nearly every sentence of a
+    market-news article, while `VIVA disuspensi` identifies one. idf fixes the ordering.
+    Measured on the recorded runs — see `test_evidence_recall_on_recorded_runs`.
+
+    ponytail: df is recomputed per claim; hoist a shared index if ranking ever shows up
+    in a profile. Deterministic — ties keep source order.
+    """
+    if not segments:
+        return []
+    n = len(segments)
+    df: dict[str, int] = {}
+    seg_terms: list[set[str]] = []
     for seg in segments:
-        seg_nums = extract_numbers(seg.text)
-        seg_words = {w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]{4,}", seg.text)}
-        score = len(words & seg_words) + 3 * len(nums & seg_nums)
+        terms = _terms(seg.text)
+        seg_terms.append(terms)
+        for word in terms:
+            df[word] = df.get(word, 0) + 1
+    claim_terms = _terms(claim_text)
+    claim_nums = extract_numbers(claim_text)
+    scored = []
+    for seg, terms in zip(segments, seg_terms):
+        score = sum(math.log1p((n - df[w] + 0.5) / (df[w] + 0.5)) for w in claim_terms & terms)
+        if claim_nums & extract_numbers(seg.text):
+            score += NUMBER_BONUS
         scored.append((score, seg))
     scored.sort(key=lambda t: -t[0])
     return [seg for score, seg in scored[:top] if score > 0] or segments[:top]
@@ -268,14 +297,21 @@ def verify_claims(claims: list[Claim], sources: list[tuple[str, str]],
         segments.extend(split_segments(text, name, start_index=len(segments) + 1))
     by_id = {s.id: s for s in segments}
     cands = {c.id: evidence_candidates(c.text, segments) for c in claims}
+    cand_ids = {c.id: {s.id for s in cands[c.id]} for c in claims}
+    last_size = 0
     try:
         with TypeSafeClient(model=MODEL) as client:
             for start in range(0, len(claims), BATCH):
                 chunk = claims[start:start + BATCH]
-                resp = client.system_one(
-                    state=build_state(chunk, sources, segments),
-                    questions=build_questions(chunk, cands),
-                )
+                # A claim can only cite the spans it was offered, so only those need
+                # their full text in `state`. `sources` still carries the whole
+                # document, so verdict recall is untouched — this is pure payload.
+                offered = [s for s in segments
+                           if s.id in set().union(*(cand_ids[c.id] for c in chunk))]
+                state = build_state(chunk, sources, offered)
+                questions = build_questions(chunk, cands)
+                last_size = len(json.dumps(state)) + len(json.dumps(questions))
+                resp = client.system_one(state=state, questions=questions)
                 model = resp.model
                 if resp.usage:
                     usage["input_tokens"] = (usage["input_tokens"] or 0) + (resp.usage.input_tokens or 0)
@@ -295,5 +331,10 @@ def verify_claims(claims: list[Claim], sources: list[tuple[str, str]],
     except VerifyError:
         raise
     except Exception as e:  # SDK error hierarchy; keep CLI free of SDK imports
-        raise VerifyError(f"Jev call failed: {e}") from e
+        # Largest request we built, so an oversized-source failure is diagnosable
+        # rather than opaque. Rough token proxy only — not a guard.
+        raise VerifyError(
+            f"Jev call failed: {e} (largest request was ~{last_size // 4} tokens; "
+            "split long sources or shorten the draft)"
+        ) from e
     return VerifyResult(verdicts=verdicts, model=model, usage=usage)

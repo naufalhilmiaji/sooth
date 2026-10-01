@@ -88,6 +88,12 @@ One request per batch of ≤ 30 claims. State is shared; questions reference cla
   "claims": [
     { "id": "c1", "text": "Refunds are processed in 3 days." },
     { "id": "c2", "text": "We support Bitcoin." }
+  ],
+  // Only the spans some claim was offered — a claim can only cite what it was given,
+  // so the rest need no full text here. `sources` above still carries the whole
+  // document, so verdict recall is untouched; this is pure payload.
+  "segments": [
+    { "id": "s1", "text": "Refunds are processed within 3 days of approval." }
   ]
 }
 ```
@@ -121,7 +127,7 @@ instructions). Every `instructions` string is prefixed with `_UNTRUSTED` — the
   "type": "choice",
   "instructions": "Statement: <claim text>\n\nWhich candidate segment best supports or contradicts the statement? Full text of each id is in `segments`. Choose 'none' if no segment is relevant.",
   "criteria": { "s12": "<first 80 chars of candidate>", "...": "…", "none": "No segment is relevant to the statement." }
-  // code pre-filters ~6 candidate ids per claim (word overlap + number hits)
+  // code pre-filters ~6 candidate ids per claim (idf-weighted terms + number bonus)
 }
 ```
 
@@ -174,7 +180,34 @@ genuinely silent source is not mislabelled as a missing citation.
 
 `Verdict = {claim_id, claim_text, draft_line, kind, p_checkable?, choice?, probabilities, confidence, details_p?, missing_numbers}`
 
-Evidence (v0.2, pre-parsed selection pattern): sources are split into sentence `segments`; code ranks ~6 candidates per claim (word overlap, numbers weighted ×3); a per-claim Choice selects the best span (`none` allowed). Report shows `source:line` + snippet. Best-effort — `none` is valid when no span matches.
+Evidence (v0.2, pre-parsed selection pattern): sources are split into sentence `segments`; a per-claim
+Choice selects the best span (`none` allowed). Report shows `source:line` + snippet. Best-effort —
+`none` is valid when no span matches, and `require_evidence` demotes an unsourced `PASS`/`FAIL` to
+`REVIEW` rather than let it ship unauditable.
+
+**Candidate ranking (v0.4).** `evidence_candidates` scores each segment by **idf-weighted term
+overlap** plus a flat bonus when it shares a number with the claim:
+
+```
+idf(w)  = log1p((N - df(w) + 0.5) / (df(w) + 0.5))     N = segments, df = segments containing w
+score   = Σ_{w ∈ claim ∩ segment} idf(w)  +  (NUMBER_BONUS if claim ∩ segment numbers)
+```
+
+Plain set-overlap (the v0.2 scorer, `|claim ∩ segment| + 3 × numbers`) counted boilerplate and
+discriminative words alike, so a span sharing the topic's common nouns outranked the one that
+actually contradicted the claim. In the Indonesian fixture, `saham` appears in most sentences
+while `VIVA disuspensi` identifies one — the old scorer ranked a `Rp 50` sentence above the
+sentence naming VIVA at `Rp 38`, and the model then had nothing to cite.
+
+Measured on the recorded runs (`test_evidence_recall_on_recorded_runs`, 12 labelled claims):
+idf finds every gold span by `k=3`; the old scorer misses one even at `k=20`. `EVIDENCE_CANDIDATES`
+stays at 6 — the plan was to raise it to 20, but the measurement says the *ranking*, not the pool
+size, was the defect, and a wider pool costs criteria tokens for no measured gain.
+
+Line numbers are line-level, not sentence-level: a source line may hold several segments (one line
+of the Indonesian fixture carries 10), so `source:line` is a locator hint and the quoted snippet is
+the precise span. Character ranges are **not** implemented — add them if an editor integration
+needs to jump to the exact offset.
 
 (If PRD table showed source snippets — that is v0.2. v0.1 report substitutes distribution; PRD example is target UX.)
 
@@ -228,6 +261,10 @@ This is the decision-ledger seed (audit trail). No viewer in v0.1.
 ## Errors
 
 - SDK raises typed errors; catch at CLI boundary, print one line to stderr, exit 3 (or 2 on API failure mid-run? → exit 3, "could not verify", never print a partial report marked complete).
+  The message carries the largest request size we built, so an oversized-source failure reads as
+  "split long sources" rather than an opaque SDK error. It is a diagnostic, **not a guard** — the
+  vendor does not document a hard cap in anything we could fetch, so no pre-flight threshold is
+  invented. Add one when a real limit is published.
 - Empty draft → usage error. Empty sources → usage error (nothing to check against).
 
 ## Security

@@ -261,6 +261,43 @@ def test_evidence_candidates_word_overlap():
     assert top[0].id == "s2"
 
 
+def _evidence_labels() -> list[tuple[str, str, int]]:
+    """(claim, source path, gold line) drawn from the recorded runs, plus the known miss.
+
+    The recorded labels are the spans a real run actually cited, so the set is biased
+    toward retrieval that already worked — it is a regression guard, not a benchmark.
+    """
+    root = Path(__file__).resolve().parents[1]
+    labels: list[tuple[str, str, int]] = []
+    for name in ("demo-en.json", "demo-id.json"):
+        record = json.loads((root / "src" / "sooth" / name).read_text(encoding="utf-8"))
+        source = record["sources"][0]
+        labels += [(r["text"], source, r["evidence"]["line"])
+                   for r in record["results"] if r.get("evidence")]
+    # demo-id c4: the run answered `contradicts 1.00` and cited nothing. The sentence
+    # that contradicts the claim is news-1.md line 5 — this is the case the idf ranking
+    # exists to fix, and plain set-overlap does not find it below k≈40.
+    labels.append(("Saham VIVA disuspensi di harga Rp 50.", "examples/news-1.md", 5))
+    return labels
+
+
+def test_evidence_recall_on_recorded_runs():
+    """Every labelled claim retrieves a span from the source line it should cite."""
+    root = Path(__file__).resolve().parents[1]
+    labels = _evidence_labels()
+    assert len(labels) >= 12, f"label set shrank to {len(labels)} — did a record change?"
+    cache: dict[str, str] = {}
+    misses = []
+    for claim, source, gold_line in labels:
+        if source not in cache:
+            cache[source] = (root / source).read_text(encoding="utf-8")
+        segs = split_segments(cache[source], source)
+        got = evidence_candidates(claim, segs)
+        if not any(s.line == gold_line for s in got):
+            misses.append((claim[:50], gold_line, [s.line for s in got]))
+    assert not misses, f"evidence not retrieved for: {misses}"
+
+
 def test_attach_evidence():
     c = split_claims("Vague praise for the team.")[0]
     base = map_verdict(c, 1.0, "supports", {}, 0.9, 0.7)

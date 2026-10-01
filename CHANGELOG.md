@@ -4,14 +4,20 @@ All notable changes to Sooth. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
-Roadmap Phase 1 — correctness of the verdict. Question wording changed in `verify.py`, so the
-calibrated thresholds were re-validated live on 2026-10-01: **29/30** on `examples/calibration.json`
-(bar ≥ 24/30) with **zero confident-wrong `PASS`** on a contradicted claim, runner exit 0.
-`tests/smoke.sh` passes, including the new hostile-source case.
+Roadmap Phases 1–2 — traceable verdicts, and evidence retrieval that finds the span it judges against.
 
-The one labelled miss is deliberate and is the honest answer for now — see
-[`examples/calibration.md`](examples/calibration.md). The README's accuracy section still describes
-the released v0.3.0 numbers and must be updated to 29/30 when this ships.
+Question wording and candidate ranking both changed in `verify.py`, so the calibrated thresholds were
+re-validated live on 2026-10-01:
+
+- **Phase 1 alone:** 29/30 (bar ≥ 24/30), zero confident-wrong `PASS`, runner exit 0.
+- **Phase 1 + 2:** **30/30**, zero confident-wrong `PASS`, runner exit 0.
+
+Phase 1 on its own was a net downgrade — a contradicted claim with no citable span became `REVIEW`
+instead of `FAIL`, which is honest but adds review load for no gain. Phase 2 removed the cause. Full
+numbers in [`examples/calibration.md`](examples/calibration.md).
+
+The README's accuracy section still describes the released v0.3.0 numbers and must be updated to
+30/30 when this ships.
 
 ### Added
 
@@ -38,15 +44,33 @@ the released v0.3.0 numbers and must be updated to 29/30 when this ships.
 
 ### Fixed
 
+- **Evidence retrieval.** `evidence_candidates` now ranks source spans by **idf-weighted term
+  overlap** instead of raw word overlap. The old scorer counted boilerplate and discriminative words
+  alike, so a span that merely shared the topic's common nouns outranked the one that actually
+  contradicted the claim — and with `require_evidence` in place, that meant a real contradiction
+  arriving as `REVIEW` with nothing to cite. In the Indonesian fixture `saham` appears in almost
+  every sentence while `VIVA disuspensi` identifies one.
+  `EVIDENCE_CANDIDATES` is unchanged at 6: raising it to 20 was the plan, but measurement showed the
+  *ranking*, not the pool size, was the defect. Offline, over 12 labelled claims from the recorded
+  runs, idf retrieves every gold span by `k=3`; the old scorer missed one even at `k=20`.
+- **Request payload.** `state` now carries only the segments a claim was offered, not every segment
+  of every source — a claim can only cite what it was given. `sources` still carries the whole
+  document, so verdict recall is unchanged. Measured live on the same draft and source:
+  **11,111 → 9,500 input tokens**.
+- An API failure now reports the largest request size it built, so an oversized source reads as
+  "split long sources" rather than an opaque SDK error. It is a diagnostic, not a guard — no cap is
+  documented by the vendor, so no threshold is invented.
+
 - `build_questions` rejects duplicate claim ids instead of silently overwriting one claim's
   questions with another's, which mis-attributed verdicts.
 
 ### Note
 
 - `src/sooth/demo-{en,id}.json` are recordings from the pre-Phase-1 pipeline. `demo-id.json` claim
-  c4 is a `FAIL` with `evidence: null`, which the live path will now report as `REVIEW`. The
-  recordings are left untouched and replay faithfully; re-record them with a real key per
-  `CONTRIBUTING.md` rather than editing verdicts by hand.
+  c4 is a `FAIL` with `evidence: null`; the live path now returns `FAIL` citing `news-1.md:5`. The
+  recordings replay faithfully (the demo does not re-run verification), so they under-report current
+  behaviour. Re-record them with a real key per `CONTRIBUTING.md` rather than editing verdicts by
+  hand.
 
 ## [0.3.0] — 2026-09-26
 

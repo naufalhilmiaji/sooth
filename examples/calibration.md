@@ -8,6 +8,30 @@ Frozen results of `examples/calibration.json` run through `tests/calibrate.py`.
 - **Score:** 30/30 first run; 29/30 after v0.2 evidence feature (bar: ≥ 24/30, zero confident-wrong `PASS` on contradicted claims — met both runs)
 - **Runner:** `PYTHONPATH=src python3 tests/calibrate.py`
 
+## 2026-10-01 re-run — roadmap Phase 2 (idf candidate ranking)
+
+- **Score:** 30/30, threshold 0.7, runner exit 0 (bar ≥ 24/30 and zero confident-wrong `PASS` — both met).
+- **The Phase 1 regression is resolved, and the claim that had no span now has its span.**
+
+`Saham VIVA disuspensi di harga Rp 50.` is `FAIL` again, and where the recorded run cited nothing,
+the live report now names `examples/news-1.md:5` — *"Misalnya PT Visi Media Asia Tbk (VIVA)
+disuspensi di harga Rp 38, …"*.
+
+The fix was the **candidate ranking**, not the candidate pool. `evidence_candidates` scores by
+idf-weighted term overlap instead of raw set-overlap, so `VIVA disuspensi` (rare, specific) outranks
+`saham` (in nearly every sentence of the article). Measured offline over 12 labelled claims from the
+recorded runs: idf retrieves every gold span by `k=3`; the old scorer missed one even at `k=20`.
+`EVIDENCE_CANDIDATES` is unchanged at 6 — raising it to 20 was the plan, and the measurement did not
+support it. The guess in the Phase 1 entry below ("when the candidate pool widens") was wrong; the
+ordering was the defect.
+
+Live payload for the same draft and source fell from **11,111 to 9,500** input tokens, because
+`state` now carries only the segments a claim was offered rather than every segment in the corpus.
+
+`tests/smoke.sh` passes: the hero fixture is `PASS 4 · FAIL 3 · REVIEW 0 · UNCHECKABLE 1`, the
+hostile-source case flips no verdict, and the Indonesian evil draft reads
+`PASS 2 · FAIL 3 · REVIEW 1 · UNCHECKABLE 1` with the VIVA `FAIL` now sourcing line 5.
+
 ## 2026-10-01 re-run — roadmap Phase 1 (`reason` + evidence rule)
 
 - **Score:** 29/30, threshold 0.7, runner exit 0 (bar ≥ 24/30 and zero confident-wrong `PASS` — both met).
