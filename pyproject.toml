@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sooth"
 version = "0.4.0"
-description = "Claim-by-claim hallucination detection and fact-checking for AI-generated text, built for CI. PASS/FAIL/REVIEW verdicts with calibrated probabilities and the source line behind each one, powered by Jev (TypeSafe System One)."
+description = "Claim-by-claim hallucination detection and fact-checking for AI-generated text, built for CI. PASS/FAIL/REVIEW verdicts, each naming the rule behind it and the source line it was judged against, powered by Jev (TypeSafe System One)."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Naufal Hilmiaji", email = "nhilmiaji@gmail.com" }]
