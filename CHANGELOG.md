@@ -43,6 +43,10 @@ against it by `test_readme_examples_match_live_output`, so they cannot drift aga
   not be obeyed. A hostile document can no longer read as an instruction to the judge.
 - `apply_safeguards` and `attach_evidence` use `dataclasses.replace`, so a field added to `Verdict`
   can no longer be silently dropped at those seams.
+- The PyPI `description` no longer claims "calibrated probabilities". Vendor probabilities are
+  calibrated across groups of predictions, not per answer, and `confidence` is a statistic collapsed
+  from the answer distribution. The README copy was corrected earlier; this was the last place the
+  overclaim lived, and it is the one shown on the package page and by `pip show`.
 
 ### Fixed
 
@@ -68,11 +72,12 @@ against it by `test_readme_examples_match_live_output`, so they cannot drift aga
 
 ### Note
 
-- `src/sooth/demo-{en,id}.json` are recordings from the pre-Phase-1 pipeline. `demo-id.json` claim
-  c4 is a `FAIL` with `evidence: null`; the live path now returns `FAIL` citing `news-1.md:5`. The
-  recordings replay faithfully (the demo does not re-run verification), so they under-report current
-  behaviour. Re-record them with a real key per `CONTRIBUTING.md` rather than editing verdicts by
-  hand.
+- `src/sooth/demo-id.json` was re-recorded on 2026-10-01 with the v0.4.0 pipeline, so the bundled
+  Indonesian case now shows every `FAIL` citing its span — including the VIVA claim that used to
+  arrive as a confident `FAIL` with `evidence: null`. `src/sooth/demo-en.json` still predates Phase 1
+  and replays unchanged: it already satisfies the evidence rule (all three `FAIL`s cite), so it was
+  left alone rather than churned. Re-record either with a real key per `CONTRIBUTING.md` — never by
+  hand-editing verdicts.
 
 ## [0.3.0] — 2026-09-26
 
