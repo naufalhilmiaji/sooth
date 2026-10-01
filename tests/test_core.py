@@ -475,6 +475,41 @@ def test_cli_demo_json_is_machine_readable():
         == len(payload["verdicts"])
 
 
+def test_readme_examples_match_live_output():
+    """README shows real output. If a renderer changes, regenerate the README.
+
+    The hero block went stale by hand once — it was still missing the `reason` column and
+    the JSON example had dropped `evidence.id` — so this pins both to the CLI.
+    """
+    import io
+    import re
+    from contextlib import redirect_stderr, redirect_stdout
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+
+    def demo(*argv: str) -> str:
+        buf = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(io.StringIO()):
+            code = sooth.cli.main(["demo", *argv])
+        assert code == 1, f"demo no longer exits 1, but the README claims it does ({argv})"
+        return buf.getvalue()
+
+    report = re.search(r"```\n(# Sooth\n.*?)```", readme, re.DOTALL)
+    assert report, "README no longer contains a fenced `sooth demo` report"
+    assert report.group(1).rstrip() == demo().rstrip(), (
+        "README's report block is stale — paste the current `sooth demo` output"
+    )
+
+    contract = re.search(r"```json\n(.*?)```", readme, re.DOTALL)
+    assert contract, "README no longer contains a JSON contract example"
+    shown = json.loads(contract.group(1))
+    live = json.loads(demo("--format", "json"))
+    live["verdicts"] = [v for v in live["verdicts"] if v["id"] == shown["verdicts"][0]["id"]]
+    assert shown == live, (
+        "README's JSON example is stale — regenerate it from `sooth demo --format json`"
+    )
+
+
 def test_cli_usage_errors_exit_3():
     import io
     from contextlib import redirect_stderr, redirect_stdout

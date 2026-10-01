@@ -4,6 +4,8 @@ All notable changes to Sooth. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-01
+
 Roadmap Phases 1–2 — traceable verdicts, and evidence retrieval that finds the span it judges against.
 
 Question wording and candidate ranking both changed in `verify.py`, so the calibrated thresholds were
@@ -16,8 +18,8 @@ Phase 1 on its own was a net downgrade — a contradicted claim with no citable 
 instead of `FAIL`, which is honest but adds review load for no gain. Phase 2 removed the cause. Full
 numbers in [`examples/calibration.md`](examples/calibration.md).
 
-The README's accuracy section still describes the released v0.3.0 numbers and must be updated to
-30/30 when this ships.
+README's report and JSON examples are now generated from real `sooth demo` output and asserted
+against it by `test_readme_examples_match_live_output`, so they cannot drift again.
 
 ### Added
 

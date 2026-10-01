@@ -2,7 +2,7 @@
 
 **LLMs generate. Sooth verifies.**
 
-Claim-by-claim hallucination detection for AI output. Sooth checks every sentence in a draft against your source material and returns `PASS` / `FAIL` / `REVIEW` — with calibrated probabilities, the exact source line behind each verdict, and exit codes that fail your build.
+Claim-by-claim hallucination detection for AI output. Sooth checks every sentence in a draft against your source material and returns `PASS` / `FAIL` / `REVIEW` — every verdict naming the rule behind it and the exact source line it was judged against, with exit codes that fail your build.
 
 [![PyPI](https://img.shields.io/pypi/v/sooth.svg)](https://pypi.org/project/sooth/)
 [![Python](https://img.shields.io/pypi/pyversions/sooth.svg)](https://pypi.org/project/sooth/)
@@ -27,16 +27,16 @@ A model was asked to summarise a product release note. Three numbers came back w
 
 **PASS 4 · FAIL 3 · REVIEW 0 · UNCHECKABLE 1** — threshold 0.70
 
-| # | Claim | Verdict | P | Why (P distribution) | Evidence |
+| # | Claim | Verdict | P | Why (reason · P distribution) | Evidence |
 |---|-------|---------|---|----------------------|----------|
-| 1 | Kestrel Cloud launched API v3 on 14 August 2026 across all of its regions. | ✅ PASS | ████████ 1.00 | supports 1.00 / contradicts 0.00 / not_found 0.00 · details 0.86 | `examples/release-notes.md:7` "API v3 is generally available in all 12 regions, includin…" |
-| 2 | The rate limit jumps to 2,000 requests per second per project, a twenty-fold increase over v2. | ❌ FAIL | ████████ 1.00 | supports 0.00 / contradicts 1.00 / not_found 0.00 · details 0.01 · missing #s: 2,000 | `examples/release-notes.md:11` "The rate limit rises from 100 requests per second to 500 …" |
-| 3 | Token pricing falls to $0.002 per 1,000 input tokens, making it the cheapest mainstream inference API. | ❌ FAIL | ████████ 1.00 | supports 0.00 / contradicts 1.00 / not_found 0.00 · details 0.01 · missing #s: 0.002 | `examples/release-notes.md:15` "Token pricing drops to $0.004 per 1,000 input tokens and …" |
-| 4 | Kestrel is now certified SOC 2 Type II, which unblocks enterprise procurement. | ❌ FAIL | ████████ 1.00 | supports 0.00 / contradicts 1.00 / not_found 0.00 · details 0.01 | `examples/release-notes.md:27` "SOC 2 Type II certification is still in progress and is n…" |
-| 5 | The free tier now includes 10,000 requests per month. | ✅ PASS | ████████ 1.00 | supports 1.00 / contradicts 0.00 / not_found 0.00 · details 0.97 | `examples/release-notes.md:15` "The free tier now includes 10,000 requests per month, up …" |
-| 6 | API v3 runs across 12 regions and held p99 latency of 180 ms through the beta. | ✅ PASS | ████████ 1.00 | supports 1.00 / contradicts 0.00 / not_found 0.00 · details 0.88 | `examples/release-notes.md:19` "Latency at p99 was 180 ms during the six-week beta." |
-| 7 | Developers say the migration is the smoothest they have seen. | ➖ UNCHECKABLE | █░░░░░░░ 0.16 | P(checkable)=0.16 |  |
-| 8 | Existing v2 keys keep working until 31 January 2027. | ✅ PASS | ████████ 1.00 | supports 1.00 / contradicts 0.00 / not_found 0.00 · details 0.99 | `examples/release-notes.md:7` "Existing v2 keys keep working until 31 January 2027." |
+| 1 | Kestrel Cloud launched API v3 on 14 August 2026 across all of its regions. | ✅ PASS | ████████ 1.00 | reason: supported · contradicts 0.00 / not_found 0.00 / supports 1.00 · details 0.86 | `examples/release-notes.md:7` "API v3 is generally available in all 12 regions, includin…" |
+| 2 | The rate limit jumps to 2,000 requests per second per project, a twenty-fold increase over v2. | ❌ FAIL | ████████ 1.00 | reason: contradicted · contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 2,000 | `examples/release-notes.md:11` "The rate limit rises from 100 requests per second to 500 …" |
+| 3 | Token pricing falls to $0.002 per 1,000 input tokens, making it the cheapest mainstream inference API. | ❌ FAIL | ████████ 1.00 | reason: contradicted · contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 · missing #s: 0.002 | `examples/release-notes.md:15` "Token pricing drops to $0.004 per 1,000 input tokens and …" |
+| 4 | Kestrel is now certified SOC 2 Type II, which unblocks enterprise procurement. | ❌ FAIL | ████████ 1.00 | reason: contradicted · contradicts 1.00 / not_found 0.00 / supports 0.00 · details 0.01 | `examples/release-notes.md:27` "SOC 2 Type II certification is still in progress and is n…" |
+| 5 | The free tier now includes 10,000 requests per month. | ✅ PASS | ████████ 1.00 | reason: supported · contradicts 0.00 / not_found 0.00 / supports 1.00 · details 0.97 | `examples/release-notes.md:15` "The free tier now includes 10,000 requests per month, up …" |
+| 6 | API v3 runs across 12 regions and held p99 latency of 180 ms through the beta. | ✅ PASS | ████████ 1.00 | reason: supported · contradicts 0.00 / not_found 0.00 / supports 1.00 · details 0.88 | `examples/release-notes.md:19` "Latency at p99 was 180 ms during the six-week beta." |
+| 7 | Developers say the migration is the smoothest they have seen. | ➖ UNCHECKABLE | █░░░░░░░ 0.16 | reason: uncheckable · P(checkable)=0.16 |  |
+| 8 | Existing v2 keys keep working until 31 January 2027. | ✅ PASS | ████████ 1.00 | reason: supported · contradicts 0.00 / not_found 0.00 / supports 1.00 · details 0.99 | `examples/release-notes.md:7` "Existing v2 keys keep working until 31 January 2027." |
 
 ## Needs review
 
@@ -45,7 +45,7 @@ A model was asked to summarise a product release note. Three numbers came back w
 
 Exit code `1`. The build stops. No human had to notice that `2,000` should have been `500`, or that SOC 2 was still *in progress* in the source.
 
-Every verdict carries its probability distribution and the source span it was judged against. When Sooth is unsure, it says `REVIEW` instead of guessing.
+Every verdict carries its probability distribution, the source span it was judged against, and the single rule that produced it (`supported`, `contradicted`, `not_found`, `detail_drift`, `smuggled_number`, `evidence_missing`, `low_confidence`, `uncheckable`). When Sooth is unsure — or cannot find a span to stand behind a verdict — it says `REVIEW` instead of guessing: a `PASS` or `FAIL` with no citation is not allowed to ship as one.
 
 Reproduce that exact report offline with `sooth demo`. The inputs ship in [`examples/`](examples/): [`release-notes.md`](examples/release-notes.md) and [`ai-summary.md`](examples/ai-summary.md).
 
@@ -53,9 +53,12 @@ Reproduce that exact report offline with `sooth demo`. The inputs ship in [`exam
 
 Measured, not asserted. [`examples/calibration.json`](examples/calibration.json) is a hand-labelled set of 30 claims — 10 supported, 10 contradicted (number flips, feature mis-attribution, negation flips), 5 invented, 5 opinions — drawn from three documents (English policy, SaaS pricing, and Indonesian market news).
 
-- **30/30 correct** verdicts, live, re-run 2026-09-26 on the v0.3.0 code. Bar is ≥ 24/30; the runner exits non-zero if it is missed.
+- **30/30 correct** verdicts, live, re-run 2026-10-01 on the v0.4.0 code. Bar is ≥ 24/30; the runner exits non-zero if it is missed.
 - **Zero confident-wrong `PASS` on a contradicted claim, in every run.** This is the number that matters: a wrong `PASS` is the failure mode that ships garbage, so it is the one the runner gates on hardest.
+- **No verdict ships without its evidence.** v0.4.0 demotes a `PASS` or `FAIL` that cannot cite a source span.
 - One case is inherently jittery: an invented claim whose checkable probability sits on the 0.5 floor, flipping between `REVIEW` and `UNCHECKABLE` across runs. Both outcomes mean "do not act on this". It is recorded rather than tuned away.
+
+v0.4.0 was held back until the retrieval fix landed. Scored with v0.4.0's `reason` and evidence rules but before its ranking fix, the same set gave **29/30** — one genuinely contradicted claim (`Saham VIVA disuspensi di harga Rp 50.`) had no citable span, so it was honestly reported as `REVIEW` rather than `FAIL`. Fixing the span *ranking* — not lowering the bar — is what returned it to `FAIL`, now citing `news-1.md:5`.
 
 Full confusion matrix and notes: [`examples/calibration.md`](examples/calibration.md). Re-run it live with `PYTHONPATH=src python3 tests/calibrate.py`. The threshold has never been moved to hide a failure — when a case regressed, question wording in `verify.py` was fixed instead.
 
@@ -93,20 +96,35 @@ sooth --source policy.md --text draft.md --format plain
 
 ```json
 {
-  "summary": { "pass": 4, "fail": 3, "review": 0, "uncheckable": 1, "threshold": 0.7 },
+  "summary": {
+    "pass": 4,
+    "fail": 3,
+    "review": 0,
+    "uncheckable": 1,
+    "threshold": 0.7
+  },
   "exit_code": 1,
   "verdicts": [
     {
       "id": "c2",
-      "text": "The rate limit jumps to 2,000 requests per second per project…",
+      "text": "The rate limit jumps to 2,000 requests per second per project, a twenty-fold increase over v2.",
       "line": 3,
       "kind": "FAIL",
+      "reason": "contradicted",
+      "p_checkable": 0.93,
       "choice": "contradicts",
-      "probabilities": { "supports": 0.0, "contradicts": 1.0, "not_found": 0.0 },
+      "probabilities": {
+        "contradicts": 1.0,
+        "not_found": 0.0,
+        "supports": 0.0
+      },
       "confidence": 1.0,
       "details_p": 0.01,
-      "missing_numbers": ["2,000"],
+      "missing_numbers": [
+        "2,000"
+      ],
       "evidence": {
+        "id": "s4",
         "text": "The rate limit rises from 100 requests per second to 500 requests per second per project.",
         "line": 11,
         "source": "examples/release-notes.md"
@@ -120,7 +138,7 @@ sooth --source policy.md --text draft.md --format plain
 
 ```yaml
 - name: Verify AI output
-  uses: naufalhilmiaji/sooth@v0.3.0
+  uses: naufalhilmiaji/sooth@v0.4.0
   with:
     source: docs/policy.md
     text: generated-reply.md
@@ -135,7 +153,7 @@ Consume the counts in later steps:
 
 ```yaml
 - id: sooth
-  uses: naufalhilmiaji/sooth@v0.3.0
+  uses: naufalhilmiaji/sooth@v0.4.0
   with: { source: policy.md, text: draft.md, fail-on: never }
   env: { TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}" }
 
@@ -148,10 +166,11 @@ Prefer plain shell? `sooth --source policy.md --text draft.md` gives the same ex
 
 ## How it works
 
-1. Draft is split into claims (one sentence each).
-2. Each claim gets four questions to Jev, fanned out in parallel batches: *is this checkable?*, *does the source support it?* (`supports` / `contradicts` / `not_found`), *do all details match exactly?*, and *which source span is the evidence?*
-3. Verdicts are mapped in code: uncheckable → `UNCHECKABLE`; low confidence → `REVIEW`; then `PASS` / `FAIL`. Safeguards demote `PASS` to `REVIEW` when details drift or claim numbers are absent from the source (checked in plain code).
-4. The report shows the full probability distribution per claim — not just a label.
+1. Draft is split into claims (one sentence each). Nothing is dropped silently — skipped sentences are counted and reported.
+2. Each claim gets four questions to Jev, fanned out in one batched call: *is this checkable?*, *does the source support it?* (`supports` / `contradicts` / `not_found`), *do all details match exactly?*, and *which source span is the evidence?* Every question states that the source is untrusted quoted data — a document cannot instruct the judge.
+3. Candidate spans are ranked in code by idf-weighted term overlap, so the sentence that contradicts a claim outranks one that merely shares its topic nouns.
+4. Verdicts are mapped in code: uncheckable → `UNCHECKABLE`; low confidence → `REVIEW`; then `PASS` / `FAIL`. Safeguards demote `PASS` when details drift or claim numbers are absent from the source (checked in plain code), and a `PASS` or `FAIL` with no cited span is demoted to `REVIEW`.
+5. Every verdict names the single rule that produced it, and the report shows the full probability distribution — not just a label.
 
 The decision logic lives in [`src/sooth/verify.py`](https://github.com/naufalhilmiaji/sooth/blob/main/src/sooth/verify.py) in a dozen readable lines. Change thresholds and rules there, not in prompts.
 
@@ -166,6 +185,8 @@ Not claiming Sooth is universally more accurate. Claiming it gives you **archite
 | `PASS` / `FAIL` / `REVIEW` | ✅ fixed vocabulary | Generated labels |
 | Probability distribution | ✅ | Usually none |
 | Verdict rules in readable code | ✅ | Prompt-dependent |
+| Verdict with no citation | demoted to `REVIEW` | Ships anyway |
+| Source treated as untrusted data | ✅ framed, never obeyed | Injectable |
 | CI exit codes | ✅ | ❌ |
 | Audit log (`--log` JSONL) | ✅ | DIY |
 | Runs the same verdict twice | ✅ deterministic mapping | Sampling variance |
@@ -188,10 +209,12 @@ The bundled Indonesian case proves the pipeline is not English-only: `sooth demo
 
 ## Known limits (alpha)
 
-- Safeguards catch most drift and smuggling: claim numbers absent from the source demote `PASS` to `REVIEW`, and a detail-match gate flags altered hedges ("about 74%" → "over 74%"). Not perfect — read the `Why` column before trusting a verdict.
+- Safeguards catch most drift and smuggling: claim numbers absent from the source demote `PASS` to `REVIEW`, and a detail-match gate flags altered hedges ("about 74%" → "over 74%"). Not perfect — read the `reason` column before trusting a verdict.
 - Derived numbers (totals, values computed outside the source) look "missing" and land in `REVIEW`.
-- Source + questions must fit ~64k tokens — split long documents yourself.
-- Sentence splitting is regex-based: abbreviations and quoted sentences can mis-split.
+- A `PASS` or `FAIL` needs a cited span. If the contradicting sentence does not surface among the candidates, the verdict is `REVIEW` instead of a guess — conservative by design, at the cost of review load.
+- Citations are line-level. A single line can hold several sentences, so `source:line` is a locator hint; the quoted snippet is the precise span.
+- Sentence splitting is regex-based: a compound sentence stays one claim, so a hallucination in one clause can hide behind a supported clause. Abbreviations and quoted sentences can mis-split.
+- Very long sources can exceed the model's context — split them yourself. A rejected request reports its size so you can see which one.
 - Requires a TypeSafe API key for anything beyond `sooth demo`.
 
 ## Development
@@ -215,11 +238,12 @@ Docs: [PRD](https://github.com/naufalhilmiaji/sooth/blob/main/docs/PRD.md) · [D
 
 ## Roadmap
 
-- **v0.3.0** — `--format json`, `sooth demo --case`, Action `fail-on` + outputs
+- **v0.4.0** — every verdict names its rule (`reason`); a `PASS`/`FAIL` must cite a span; idf-ranked evidence retrieval; sources framed as untrusted data
+- **v0.3.0** shipped — `--format json`, `sooth demo --case`, Action `fail-on` + outputs
 - **v0.2.3** shipped — GitHub Action: CI quality gate in one `uses:` line
 - **v0.2.2** shipped — `sooth demo` (offline, no API key)
 - **v0.2.1** shipped — source-span evidence, published on PyPI
-- later — pluggable backends (local models), hosted web app, review queues
+- later — extraction benchmark on real drafts, pluggable backends (local models), hosted web app, review queues
 
 ## License
 
