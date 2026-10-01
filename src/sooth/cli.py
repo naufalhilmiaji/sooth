@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sooth import __version__
-from sooth.claims import split_claims
+from sooth.claims import dropped_sentences, split_claims
 from sooth.report import (
     exit_code,
     log_record,
@@ -92,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     if not claims:
         print("error: no claims found in draft", file=sys.stderr)
         return 3
+    skipped = dropped_sentences(draft)
+    if skipped:
+        # Never let a sentence vanish without a word about it.
+        print(f"note: {len(skipped)} sentence(s) skipped as non-claims "
+              "(questions, or fragments without a number)", file=sys.stderr)
 
     try:
         result = verify_claims(claims, sources, threshold=args.confidence)

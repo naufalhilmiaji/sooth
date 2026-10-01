@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # direct-r
 
 import sooth
 import sooth.cli
-from sooth.claims import split_claims, split_segments
+from sooth.claims import Claim, dropped_sentences, split_claims, split_segments
 from sooth.report import (
     bar,
     exit_code,
@@ -29,6 +29,7 @@ from sooth.verify import (
     REVIEW,
     UNCHECKABLE,
     Verdict,
+    VerifyError,
     VerifyResult,
     apply_safeguards,
     attach_evidence,
@@ -37,6 +38,7 @@ from sooth.verify import (
     evidence_candidates,
     map_verdict,
     missing_numbers,
+    require_evidence,
 )
 
 
@@ -91,6 +93,32 @@ def test_split_bold_handling():
     ]
 
 
+def test_split_keeps_short_sentences_that_carry_a_number():
+    """A 3-word sentence with a figure is a checkable claim; it must not vanish."""
+    claims = split_claims("It cost $2M. The team shipped the whole release on time.")
+    assert [c.text for c in claims] == [
+        "It cost $2M.",
+        "The team shipped the whole release on time.",
+    ]
+
+
+def test_abbreviation_does_not_swallow_the_next_sentence():
+    """Reproduces the `Dr.` mis-split: the numbered follow-up used to disappear."""
+    claims = split_claims("Dr. Smith said the migration finished. It cost $2M.")
+    assert "It cost $2M." in [c.text for c in claims]
+
+
+def test_dropped_sentences_are_reported_not_silent():
+    text = "Do you like it?\nYes\nWe support card and bank payments only.\n"
+    assert [c.text for c in split_claims(text)] == ["We support card and bank payments only."]
+    drops = dropped_sentences(text)
+    assert "Do you like it?" in drops and "Yes" in drops
+
+
+def test_no_drops_reported_on_a_clean_draft():
+    assert dropped_sentences("We support card and bank payments only.") == []
+
+
 # --- verify.map_verdict ---
 
 
@@ -123,10 +151,47 @@ def test_verdict_threshold_boundary_inclusive():
     assert map_verdict(c, 1.0, "supports", {}, 0.7, 0.7).kind == PASS
 
 
+def test_reason_names_the_rule_that_fired():
+    """`reason` is the machine-readable why — one name per demotion path."""
+    c = split_claims("Vague praise for the team.")[0]
+    seg = split_segments("Team delivered the project on time.", "a.md")[0]
+
+    def sourced(v: Verdict) -> Verdict:
+        return attach_evidence(v, {seg.id: seg}, seg.id)
+
+    assert map_verdict(c, 1.0, "supports", {}, 0.9, 0.7).reason == "supported"
+    assert map_verdict(c, 0.2, "not_found", {}, 0.9, 0.7).reason == "uncheckable"
+    assert map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7).reason == "contradicted"
+    assert map_verdict(c, 1.0, "not_found", {}, 0.9, 0.7).reason == "not_found"
+    assert sourced(map_verdict(c, 1.0, "supports", {}, 0.55, 0.7)).reason == "low_confidence"
+
+    gate = apply_safeguards(map_verdict(c, 1.0, "supports", {}, 0.9, 0.7), 0.3, [])
+    assert sourced(gate).reason == "detail_drift"
+
+    smuggled = apply_safeguards(map_verdict(c, 1.0, "supports", {}, 0.9, 0.7), 0.9, ["110"])
+    assert sourced(smuggled).reason == "smuggled_number"
+
+    unsourced = require_evidence(map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7))
+    assert unsourced.kind == REVIEW and unsourced.reason == "evidence_missing"
+
+
+def test_require_evidence_demotes_unsourced_verdicts():
+    """A PASS/FAIL with no cited span is not auditable — it becomes REVIEW."""
+    c = split_claims("Vague praise for the team.")[0]
+    seg = split_segments("Team delivered the project on time.", "a.md")[0]
+    unsourced = map_verdict(c, 1.0, "contradicts", {}, 0.9, 0.7)
+
+    assert require_evidence(unsourced).kind == REVIEW
+    assert require_evidence(attach_evidence(unsourced, {}, "none")).kind == REVIEW
+    assert require_evidence(attach_evidence(unsourced, {seg.id: seg}, seg.id)).kind == FAIL
+    # REVIEW is never touched by the evidence rule
+    assert require_evidence(map_verdict(c, 1.0, "not_found", {}, 0.9, 0.7)).kind == REVIEW
+
+
 # --- verify builders ---
 
 
-def test_builders_two_questions_per_claim():
+def test_builders_four_questions_per_claim():
     claims = split_claims("A concrete claim about billing.\nAnother concrete claim about refunds.")
     segs = split_segments("Refunds take three days.", "a.md")
     cands = {c.id: segs for c in claims}
@@ -147,6 +212,27 @@ def test_builders_two_questions_per_claim():
     assert state["sources"][0] == {"name": "a.md", "text": "text"}
     assert state["claims"][0]["text"] == claims[0].text
     assert state["segments"][0]["id"] == segs[0].id
+
+
+def test_every_question_frames_the_source_as_untrusted():
+    """A document can contain text aimed at the judge; no question may omit the clause."""
+    claims = split_claims("A concrete claim about billing refunds.")
+    for name, question in build_questions(claims, {}).items():
+        assert "untrusted" in question["instructions"], f"{name} lost the data/instruction split"
+
+
+def test_build_questions_rejects_duplicate_ids():
+    """Ids are dict keys — a collision silently overwrites a question and mis-attributes it."""
+    claims = [
+        Claim(id="c1", text="First claim about billing refunds.", line=1),
+        Claim(id="c1", text="Second claim about shipping delays.", line=2),
+    ]
+    try:
+        build_questions(claims, {})
+    except VerifyError as e:
+        assert "duplicate claim ids" in str(e)
+    else:
+        raise AssertionError("duplicate ids accepted — questions would be overwritten")
 
 
 def test_split_segments_ids_and_sources():
@@ -287,6 +373,12 @@ def test_render_json_agrees_with_log_record_verdicts():
     rec = log_record(result, 0.7, ["a.md"], "d.md")
     payload = json.loads(render_json(result.verdicts, 0.7))
     assert rec["results"] == payload["verdicts"]
+
+
+def test_verdict_dict_carries_reason():
+    """Every serialised verdict names the rule that produced it."""
+    payload = json.loads(render_json([v(FAIL, confidence=1.0)], 0.7))
+    assert payload["verdicts"][0]["reason"] == "contradicted"
 
 
 # --- packaging / CLI surface ---

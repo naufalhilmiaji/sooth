@@ -11,6 +11,7 @@ _HEADING = re.compile(r"^\s{0,3}#{1,6}\s")
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 _BOLD_ONLY = re.compile(r"^\*\*[^*]+\*\*:?\s*$")  # **Label** or **Label:** — heading, not a claim
 _MIN_WORDS = 4
+_HAS_DIGIT = re.compile(r"\d")
 
 
 @dataclass(frozen=True)
@@ -29,9 +30,15 @@ class Segment:
     source: str
 
 
-def _iter_sentences(text: str) -> list[tuple[int, str]]:
-    """(line_no, sentence) pairs — shared by claim and segment splitting."""
-    out: list[tuple[int, str]] = []
+def _scan(text: str) -> tuple[list[tuple[int, str]], list[str]]:
+    """(kept, dropped) sentences — shared by claim and segment splitting.
+
+    A sentence is dropped only when it is not claim-shaped: a question, or a fragment
+    with no number in it. Short sentences that carry a digit are kept — `It cost $2M.`
+    is three words and a claim, and dropping it would hide a checkable statement.
+    """
+    kept: list[tuple[int, str]] = []
+    dropped: list[str] = []
     for lineno, raw in enumerate(text.splitlines(), start=1):
         if _HEADING.match(raw):
             continue
@@ -41,10 +48,23 @@ def _iter_sentences(text: str) -> list[tuple[int, str]]:
         line = line.replace("**", "")
         for sentence in _SENTENCE_SPLIT.split(line):
             s = sentence.strip()
-            if not s or s.endswith("?") or len(s.split()) < _MIN_WORDS:
+            if not s:
                 continue
-            out.append((lineno, s))
-    return out
+            if s.endswith("?") or (len(s.split()) < _MIN_WORDS and not _HAS_DIGIT.search(s)):
+                dropped.append(s)
+                continue
+            kept.append((lineno, s))
+    return kept, dropped
+
+
+def _iter_sentences(text: str) -> list[tuple[int, str]]:
+    """(line_no, sentence) pairs — the kept half of `_scan`."""
+    return _scan(text)[0]
+
+
+def dropped_sentences(text: str) -> list[str]:
+    """Sentences skipped as non-claims. Surfaced so nothing disappears silently."""
+    return _scan(text)[1]
 
 
 def split_claims(text: str) -> list[Claim]:

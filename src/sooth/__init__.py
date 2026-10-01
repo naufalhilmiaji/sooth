@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-from sooth.claims import Claim, split_claims
+from sooth.claims import Claim, dropped_sentences, split_claims
 from sooth.report import (
     exit_code,
     log_record,
@@ -13,7 +13,14 @@ from sooth.report import (
     render_markdown,
     render_plain,
 )
-from sooth.verify import MODEL, Verdict, VerifyError, map_verdict, verify_claims
+from sooth.verify import (
+    MODEL,
+    Verdict,
+    VerifyError,
+    map_verdict,
+    require_evidence,
+    verify_claims,
+)
 
 try:  # single source of truth: the installed distribution metadata
     __version__ = _pkg_version("sooth")
@@ -26,12 +33,14 @@ __all__ = [
     "Verdict",
     "VerifyError",
     "__version__",
+    "dropped_sentences",
     "exit_code",
     "log_record",
     "map_verdict",
     "render_json",
     "render_markdown",
     "render_plain",
+    "require_evidence",
     "split_claims",
     "verify_claims",
 ]

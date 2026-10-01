@@ -4,6 +4,50 @@ All notable changes to Sooth. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+Roadmap Phase 1 — correctness of the verdict. Question wording changed in `verify.py`, so the
+calibrated thresholds were re-validated live on 2026-10-01: **29/30** on `examples/calibration.json`
+(bar ≥ 24/30) with **zero confident-wrong `PASS`** on a contradicted claim, runner exit 0.
+`tests/smoke.sh` passes, including the new hostile-source case.
+
+The one labelled miss is deliberate and is the honest answer for now — see
+[`examples/calibration.md`](examples/calibration.md). The README's accuracy section still describes
+the released v0.3.0 numbers and must be updated to 29/30 when this ships.
+
+### Added
+
+- `reason` on every verdict (Markdown `Why` column, JSON, and `plain` output) — names the one rule
+  that produced the kind: `supported`, `contradicted`, `not_found`, `low_confidence`,
+  `detail_drift`, `smuggled_number`, `evidence_missing`, `uncheckable`. Derived, so it cannot go
+  stale when `apply_safeguards` or `require_evidence` rewrite the kind.
+- `claims.dropped_sentences(text)` — the sentences a split skipped. The CLI prints the count to
+  stderr, so no sentence disappears without a word about it.
+- `verify.require_evidence` — exported.
+
+### Changed
+
+- **Behavioural:** a `PASS` or `FAIL` with no cited source span is now demoted to `REVIEW`
+  (`reason: evidence_missing`). The verdict questions see the whole source but the evidence question
+  sees only the six pre-filtered candidates, so a confident verdict could previously ship with
+  `evidence: null` and no way to audit it. **This can lower `PASS`/`FAIL` counts and raise `REVIEW`.**
+- **Behavioural:** short sentences carrying a number are now kept as claims. `It cost $2M.` used to
+  be dropped as a three-word fragment and never verified.
+- Question instructions now state that `sources` and `segments` are untrusted quoted data that must
+  not be obeyed. A hostile document can no longer read as an instruction to the judge.
+- `apply_safeguards` and `attach_evidence` use `dataclasses.replace`, so a field added to `Verdict`
+  can no longer be silently dropped at those seams.
+
+### Fixed
+
+- `build_questions` rejects duplicate claim ids instead of silently overwriting one claim's
+  questions with another's, which mis-attributed verdicts.
+
+### Note
+
+- `src/sooth/demo-{en,id}.json` are recordings from the pre-Phase-1 pipeline. `demo-id.json` claim
+  c4 is a `FAIL` with `evidence: null`, which the live path will now report as `REVIEW`. The
+  recordings are left untouched and replay faithfully; re-record them with a real key per
+  `CONTRIBUTING.md` rather than editing verdicts by hand.
+
 ## [0.3.0] — 2026-09-26
 
 Presentation and machine-consumption release. No change to verification behaviour or to any calibrated threshold.
